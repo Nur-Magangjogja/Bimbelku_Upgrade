@@ -10,7 +10,7 @@ class OrderObserver
 {
     public function updated(Order $order): void
     {
-        if (!$order->wasChanged('status')) {
+        if (! $order->wasChanged('status')) {
             return;
         }
 
@@ -21,17 +21,24 @@ class OrderObserver
 
         if (in_array($currentStatus, ['rejected', 'cancelled', 'expired'], true)) {
             $wallets->releaseReserved($order, null, "order_status:{$currentStatus}");
+
             return;
         }
 
         if ($currentStatus === 'paid') {
             $wallets->captureReserved($order);
             $ledger->recordPaymentReceived($order->fresh());
+
             return;
         }
 
         if ($currentStatus === 'refund_pending') {
-            if (!in_array($previousStatus, ['paid', 'refund_pending', 'refunded'], true)) {
+            if ($order->payment_reconciliation_status === 'late_payment_refund') {
+                $ledger->recordLateGatewayPaymentReceived($order->fresh());
+
+                return;
+            }
+            if (! in_array($previousStatus, ['paid', 'refund_pending', 'refunded'], true)) {
                 $wallets->captureReserved($order);
                 $ledger->recordPaymentReceived($order->fresh());
             }

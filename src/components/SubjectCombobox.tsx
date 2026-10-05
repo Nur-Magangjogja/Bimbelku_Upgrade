@@ -11,6 +11,7 @@ export interface SubjectOption {
   grades?: string[];
   is_elective?: boolean;
   is_active?: boolean;
+  show_chapter_selection?: boolean;
 }
 
 interface SubjectComboboxProps {

@@ -342,6 +342,14 @@ export default function TutorSearchMonitoring() {
     setSearchParams(next, { replace: true });
   };
 
+  const showAttention = () => {
+    setScope("active");
+    setMode("all");
+    setSearchText("");
+    setAppliedSearch("");
+    updateStatus("attention");
+  };
+
   const synchronize = async () => {
     if (!detail) return;
     setSyncing(true);
@@ -489,12 +497,13 @@ export default function TutorSearchMonitoring() {
 
           <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
             <SummaryBox label="Semua" value={result.summary.all} />
-            <SummaryBox label="Perhatian" value={result.summary.attention} alert />
+            <SummaryBox label="Perhatian" value={result.summary.attention} alert onClick={showAttention} />
             <SummaryBox label="Mencari" value={result.summary.matching} />
             <SummaryBox label="Menunggu" value={result.summary.teacher_pending} />
             <SummaryBox label="Tidak ditemukan" value={result.summary.no_teacher} alert />
             <SummaryBox label="Berakhir" value={result.summary.expired} />
           </div>
+          <p className="mt-3 text-xs text-slate-300">Angka ringkasan mencakup semua pencarian. Klik Perhatian untuk membuka seluruh item yang perlu tindakan, termasuk jawaban tutor yang terlambat.</p>
           <div className={`mt-4 rounded-2xl border px-4 py-3 text-xs font-bold ${result.system_health.scheduler_healthy ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-100" : "border-rose-400/30 bg-rose-400/10 text-rose-100"}`}>
             Scheduler pencarian: {result.system_health.scheduler_healthy ? "aktif" : "belum terdeteksi"} · heartbeat terakhir {formatDateTime(result.system_health.last_heartbeat_at)}
           </div>
@@ -571,6 +580,11 @@ export default function TutorSearchMonitoring() {
               <CheckCircle2 className="mx-auto text-emerald-600" size={42} />
               <h2 className="mt-4 text-lg font-black text-slate-950">Tidak ada pencarian pada filter ini</h2>
               <p className="mt-2 text-sm text-slate-500">Ubah filter atau pencarian untuk melihat data lainnya.</p>
+              {result.summary.attention > 0 && (
+                <button type="button" onClick={showAttention} className="mt-4 min-h-11 rounded-xl bg-slate-950 px-5 text-sm font-black text-white">
+                  Lihat {result.summary.attention} pencarian yang perlu perhatian
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -1053,12 +1067,12 @@ function SearchCard({ item, onOpen }: { item: SearchItem; onOpen: () => void }) 
   );
 }
 
-function SummaryBox({ label, value, alert = false }: { label: string; value: number; alert?: boolean }) {
+function SummaryBox({ label, value, alert = false, onClick }: { label: string; value: number; alert?: boolean; onClick?: () => void }) {
+  const className = `rounded-2xl border p-3 ${alert && value > 0 ? "border-rose-400/30 bg-rose-500/15" : "border-white/10 bg-white/5"}`;
+  const content = <><p className="text-2xl font-black">{value}</p><p className="mt-1 text-[11px] font-bold text-slate-300">{label}</p></>;
+  if (onClick) return <button type="button" onClick={onClick} className={`${className} text-left transition hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-300`} aria-label={`Lihat ${value} pencarian perlu perhatian`}>{content}</button>;
   return (
-    <div className={`rounded-2xl border p-3 ${alert && value > 0 ? "border-rose-400/30 bg-rose-500/15" : "border-white/10 bg-white/5"}`}>
-      <p className="text-2xl font-black">{value}</p>
-      <p className="mt-1 text-[11px] font-bold text-slate-300">{label}</p>
-    </div>
+    <div className={className}>{content}</div>
   );
 }
 

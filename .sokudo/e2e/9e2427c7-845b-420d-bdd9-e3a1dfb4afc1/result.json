@@ -1,0 +1,83 @@
+{
+  "runId": "9e2427c7-845b-420d-bdd9-e3a1dfb4afc1",
+  "workspace": "aab58d15-5141-4924-8999-1b73575ec5ad",
+  "trigger": "agent",
+  "status": "passed",
+  "jobs": [
+    {
+      "flowPath": "e2e/login-invalid-credentials.yaml",
+      "flowName": "login-invalid-credentials",
+      "status": "passed",
+      "steps": [
+        {
+          "index": 0,
+          "label": "launchApp",
+          "sourceLine": 5,
+          "status": "success",
+          "workedMs": 233
+        },
+        {
+          "index": 1,
+          "label": "assertVisible \"Masuk ke BimbelKu\"",
+          "sourceLine": 6,
+          "status": "success",
+          "workedMs": 15
+        },
+        {
+          "index": 2,
+          "label": "tapOn \"Email\"",
+          "sourceLine": 7,
+          "status": "success",
+          "workedMs": 19
+        },
+        {
+          "index": 3,
+          "label": "inputText \"invalid@example.test\"",
+          "sourceLine": 8,
+          "status": "success",
+          "workedMs": 34
+        },
+        {
+          "index": 4,
+          "label": "tapOn \"Kata sandi\"",
+          "sourceLine": 9,
+          "status": "success",
+          "workedMs": 24
+        },
+        {
+          "index": 5,
+          "label": "inputText \"wrongpass123\"",
+          "sourceLine": 10,
+          "status": "success",
+          "workedMs": 6
+        },
+        {
+          "index": 6,
+          "label": "takeScreenshot \"login-filled\"",
+          "sourceLine": 11,
+          "status": "success",
+          "workedMs": 177,
+          "screenshotPath": "C:\\laragon\\www\\Website_Bimbelku Upgrade\\.sokudo\\e2e\\9e2427c7-845b-420d-bdd9-e3a1dfb4afc1\\login-invalid-credentials\\login-filled.png"
+        },
+        {
+          "index": 7,
+          "label": "tapOn \"Masuk\"",
+          "sourceLine": 12,
+          "status": "success",
+          "workedMs": 13
+        },
+        {
+          "index": 8,
+          "label": "assertVisible \"Email atau password salah.\"",
+          "sourceLine": 13,
+          "status": "success",
+          "workedMs": 642
+        }
+      ],
+      "startedMs": 1790997727375,
+      "endedMs": 1790997728552
+    }
+  ],
+  "startedMs": 1790997727373,
+  "endedMs": 1790997728557
+}

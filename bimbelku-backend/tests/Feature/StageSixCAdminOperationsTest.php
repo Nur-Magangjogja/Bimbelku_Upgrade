@@ -317,7 +317,7 @@ class StageSixCAdminOperationsTest extends TestCase
         $admin = User::factory()->create(['role' => 'admin', 'status' => 'active']);
         $student = User::factory()->create(['role' => 'student', 'status' => 'active']);
         User::factory()->create(['role' => 'teacher', 'status' => 'pending']);
-        $this->makeSearch($student, ['status' => 'no_teacher']);
+        $this->makePackageSearch($student, ['status' => 'no_teacher']);
         Order::create([
             'user_id' => $student->id,
             'order_id' => 'INV-6C-ADMIN-1',
@@ -338,6 +338,59 @@ class StageSixCAdminOperationsTest extends TestCase
                 'href' => '/admin/tutor-searches?status=attention',
                 'count' => 1,
             ]);
+    }
+
+    public function test_overdue_search_on_a_past_date_is_visible_in_attention_and_default_list(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-03 10:00:00', 'Asia/Jakarta'));
+        $admin = User::factory()->create(['role' => 'admin', 'status' => 'active']);
+        $student = User::factory()->create(['role' => 'student', 'status' => 'active']);
+        $search = $this->makePackageSearch($student, [
+            'status' => 'teacher_pending',
+            'scheduled_date' => today()->subDays(2)->toDateString(),
+            'teacher_response_deadline' => now()->subDays(2),
+            'search_expires_at' => now()->subDay(),
+        ]);
+        // An old non-package request must not inflate a badge whose link only lists packages.
+        $this->makeSearch($student, ['status' => 'no_teacher']);
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/admin/dashboard-stats')->assertOk()
+            ->assertJsonPath('counts.matching_attention', 1);
+        foreach (['/api/admin/tutor-searches', '/api/admin/tutor-searches?status=attention'] as $url) {
+            $this->getJson($url)->assertOk()
+                ->assertJsonPath('summary.attention', 1)
+                ->assertJsonPath('meta.total', 1)
+                ->assertJsonPath('data.0.id', $search->id)
+                ->assertJsonPath('data.0.needs_attention', true)
+                ->assertJsonPath('data.0.attention_reason', 'Batas jawaban tutor telah terlewati dan perlu disinkronkan.');
+        }
+        $this->getJson("/api/admin/tutor-searches/{$search->id}")->assertOk();
+
+        $search->update(['status' => 'expired']);
+        $this->getJson('/api/admin/tutor-searches?status=attention')->assertOk()
+            ->assertJsonPath('summary.attention', 0)->assertJsonPath('meta.total', 0);
+        $this->getJson('/api/admin/dashboard-stats')->assertOk()
+            ->assertJsonPath('counts.matching_attention', 0);
+        $this->getJson('/api/admin/tutor-searches?scope=history')->assertOk()
+            ->assertJsonPath('data.0.id', $search->id);
+    }
+
+    public function test_expired_search_counted_as_attention_is_not_hidden_in_the_active_scope(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-03 10:00:00', 'Asia/Jakarta'));
+        $admin = User::factory()->create(['role' => 'admin', 'status' => 'active']);
+        $student = User::factory()->create(['role' => 'student', 'status' => 'active']);
+        $search = $this->makePackageSearch($student, ['status' => 'expired', 'scheduled_date' => today()->addDay()->toDateString()]);
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/admin/tutor-searches?status=attention')->assertOk()
+            ->assertJsonPath('summary.attention', 1)
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $search->id)
+            ->assertJsonPath('data.0.needs_attention', true);
+        $this->getJson('/api/admin/dashboard-stats')->assertOk()
+            ->assertJsonPath('counts.matching_attention', 1);
     }
 
     private function makeEligibleTeacher(): User

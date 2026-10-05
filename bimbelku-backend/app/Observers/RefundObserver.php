@@ -2,8 +2,8 @@
 
 namespace App\Observers;
 
-use App\Models\Refund;
 use App\Models\Notification;
+use App\Models\Refund;
 use App\Models\User;
 use App\Services\FinancialLedgerService;
 
@@ -12,7 +12,9 @@ class RefundObserver
     public function created(Refund $refund): void
     {
         app(FinancialLedgerService::class)->recordRefundQueued($refund);
-        if ($this->isAutomatic($refund)) return;
+        if ($this->isAutomatic($refund)) {
+            return;
+        }
         User::query()->where('role', 'admin')->where('status', 'active')->pluck('id')->each(
             fn (int $adminId) => Notification::updateOrCreate(
                 ['unique_key' => "refund-action:{$refund->id}:{$adminId}"],
@@ -60,7 +62,7 @@ class RefundObserver
 
     private function isAutomatic(Refund $refund): bool
     {
-        return $refund->source_type === 'teacher_replacement'
+        return in_array($refund->source_type, ['teacher_replacement', 'late_gateway_payment'], true)
             || in_array(mb_strtolower(trim((string) $refund->reason)), [
                 'tutor tidak ditemukan',
                 'paket dibatalkan murid saat pencarian tutor',

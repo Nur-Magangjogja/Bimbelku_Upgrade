@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Landmark, Loader2, ShieldAlert } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Loader2, ShieldAlert } from "lucide-react";
 import TeacherLayout from "@/components/TeacherLayout";
 import { TeacherBankSettings } from "@/pages/teacher/TeacherBankSettings";
 import http, { getApiError } from "@/lib/http";
@@ -15,6 +15,7 @@ type SalarySnapshot = {
 const rupiah = (value: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value);
 
 export default function TeacherPayoutDestination() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const hasAmount = searchParams.has("amount");
   const amount = Number(searchParams.get("amount"));
@@ -39,7 +40,6 @@ export default function TeacherPayoutDestination() {
 
   const validAmount = Number.isInteger(amount) && amount >= 10_000 && amount <= (salary?.balances.available || 0);
   const tax = Math.round(amount * (salary?.withholding_tax_percent || 0) / 100);
-  const holdActive = Boolean(salary?.bank.payout_hold_until && new Date(salary.bank.payout_hold_until).getTime() > Date.now());
 
   return <TeacherLayout title="Tujuan pencairan"><main className="mx-auto max-w-6xl space-y-5 pb-12 sm:space-y-7">
     <Link to="/guru/dompet" className="inline-flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-slate-900"><ArrowLeft size={16} /> Kembali ke dompet</Link>
@@ -54,12 +54,13 @@ export default function TeacherPayoutDestination() {
         <div><p className="text-slate-500">Perkiraan potongan pajak</p><p className="mt-1 font-black text-slate-900">{rupiah(tax)}</p></div>
         <div><p className="text-slate-500">Jumlah yang akan ditransfer</p><p className="mt-1 font-black text-emerald-700">{rupiah(amount - tax)}</p></div>
       </section>}
-      <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950"><ShieldAlert className="mt-0.5 shrink-0" size={19} /><p>Verifikasi nama pemilik rekening langsung dari bank belum aktif. Menyimpan rekening bukan berarti rekening sudah terverifikasi, sehingga permintaan transfer belum dapat dikirim. Kami tidak akan mengirim uang berdasarkan nama yang diketik saja.</p></div>
-      <TeacherBankSettings onSaved={() => void load()} />
-      {hasAmount && <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-        <div className="flex items-start gap-3"><Landmark className="mt-0.5 shrink-0 text-slate-600" size={20} /><div><h2 className="font-black text-slate-900">Konfirmasi transfer</h2><p className="mt-1 text-sm leading-6 text-slate-600">{holdActive ? "Perubahan rekening masih dalam masa pengamanan." : !salary?.bank.is_complete ? "Simpan rekening tujuan terlebih dahulu." : "Menunggu aktivasi verifikasi nama rekening oleh bank."} Saat verifikasi tersedia dan cocok, transfer diproses otomatis; status berhasil menunggu konfirmasi akhir dari bank.</p></div></div>
-        <button type="button" disabled className="mt-5 h-11 w-full cursor-not-allowed rounded-xl bg-slate-200 font-bold text-slate-500" title="Verifikasi nama rekening belum aktif">Cairkan dana · menunggu verifikasi rekening</button>
-      </section>}
+      {!salary?.bank_name_validation_available && <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950"><ShieldAlert className="mt-0.5 shrink-0" size={19} /><p>Pencairan belum tersedia karena pengecekan nama pemilik rekening langsung dari bank belum aktif. Tombol pencairan tidak akan mengubah rekening atau saldo sampai verifikasi ini tersedia.</p></div>}
+      <TeacherBankSettings
+        payoutAmount={hasAmount ? amount : undefined}
+        payoutAvailable={Boolean(salary?.bank_name_validation_available)}
+        onSaved={() => void load()}
+        onPayoutCompleted={() => navigate("/guru/dompet")}
+      />
     </>}
   </main></TeacherLayout>;
 }

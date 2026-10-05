@@ -157,4 +157,52 @@ class AdminFinanceAndTeacherScheduleTest extends TestCase
         $refund->update(['gateway_status' => 'FAILED']);
         $this->getJson('/api/admin/dashboard-stats')->assertOk()->assertJsonPath('counts.refunds', 1);
     }
+
+    public function test_refunds_needing_action_appear_first_without_reordering_history(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'status' => 'active']);
+        $student = User::factory()->create(['role' => 'student', 'status' => 'active']);
+        $order = Order::create([
+            'user_id' => $student->id,
+            'order_id' => 'INV-REFUND-ORDER-001',
+            'amount' => 100000,
+            'status' => 'refund_pending',
+        ]);
+        $createRefund = fn (array $attributes) => Refund::create(array_merge([
+            'order_id' => $order->id,
+            'user_id' => $student->id,
+            'amount' => 100000,
+            'reason' => 'Uji urutan refund',
+            'status' => 'pending',
+        ], $attributes));
+
+        $waiting = $createRefund(['created_at' => now(), 'updated_at' => now()]);
+        $transfer = $createRefund([
+            'created_at' => now()->subHour(),
+            'updated_at' => now()->subHour(),
+            'destination_method' => 'bank_transfer',
+            'destination_selected_at' => now()->subHour(),
+        ]);
+        $failed = $createRefund([
+            'created_at' => now()->subHours(2),
+            'updated_at' => now()->subHours(2),
+            'destination_method' => 'xendit_original',
+            'destination_selected_at' => now()->subHours(2),
+            'gateway_status' => 'FAILED',
+        ]);
+        $historyOlder = $createRefund(['status' => 'paid', 'created_at' => now()->subDays(3), 'updated_at' => now()->subDays(3)]);
+        $historyNewer = $createRefund(['status' => 'paid', 'created_at' => now()->subDay(), 'updated_at' => now()->subDay()]);
+
+        Sanctum::actingAs($admin);
+        $this->getJson('/api/admin/finance/refunds')->assertOk()
+            ->assertJsonPath('pending.0.id', $transfer->id)
+            ->assertJsonPath('pending.0.needs_action', true)
+            ->assertJsonPath('pending.0.action_label', 'Perlu transfer')
+            ->assertJsonPath('pending.1.id', $failed->id)
+            ->assertJsonPath('pending.1.action_label', 'Pengiriman gagal')
+            ->assertJsonPath('pending.2.id', $waiting->id)
+            ->assertJsonPath('pending.2.needs_action', false)
+            ->assertJsonPath('history.0.id', $historyNewer->id)
+            ->assertJsonPath('history.1.id', $historyOlder->id);
+    }
 }

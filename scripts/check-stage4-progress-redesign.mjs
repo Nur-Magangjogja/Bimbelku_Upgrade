@@ -31,7 +31,7 @@ expect(!exists("src/components/StudentWorkspaceList.tsx"), "StudentWorkspaceList
 expect(app.includes('path="/student/progress/:kind/:id"') && app.includes("LearningProgressDetail"), "route detail Progress belum tersedia");
 expect(progress.includes('scope: "progress"') && progress.includes('to={`/student/progress/package/${item.id}`}') && progress.includes('to={`/student/progress/cheap-class/${item.id}`}'), "halaman Progress belum menjadi daftar program per paket");
 expect(progressLib.includes("packageChapterStats") && progressLib.includes("cheapClassChapterStats"), "perhitungan progress materi belum dipisahkan dari pemakaian sesi");
-expect(detail.includes("Progress dihitung dari Bab") && detail.includes("Jumlah sesi tidak dipakai sebagai persentase materi"), "detail Paket Belajar belum mengunci progress per Bab yang independen dari jumlah sesi");
+expect(detail.includes("stats.tracksChapters") && detail.includes("bukan penguasaan materi") && detail.includes("Progress materi dihitung dari Bab"), "detail Paket Belajar harus membedakan progress Bab lama, pertemuan selesai, dan penilaian tutor");
 expect(detail.includes('initialTab="progress"') && detail.includes("package_subject_id"), "laporan tutor lama belum tetap dapat dibuka dari detail paket baru");
 
 expect(packages.includes("Pemakaian sesi") && packages.includes("Bukan persentase penguasaan materi"), "Kelas Saya masih menyebut pemakaian sesi sebagai progress materi");
@@ -41,10 +41,10 @@ expect(
     || (myClasses.includes('`/student/progress/cheap-class/${group.id}`') && myClasses.includes("Lihat progress")),
   "Kelas Saya murid belum memiliki shortcut detail Progress Kelas Kelompok",
 );
-expect(account.includes("Lihat progress per paket") && !account.includes("Catatan tutor\", description"), "halaman Saya masih memakai struktur Progress lama/duplikat");
+expect(account.includes('to: "/student/vouchers"') && !account.includes('to: "/student/progress"') && !account.includes("Catatan tutor\", description"), "halaman Saya harus berfokus pada akun/voucher, bukan menduplikasi navigasi Progress di sidebar");
 
-expect(how.includes('import Reveal from "@/components/Reveal"') && how.includes("Bab yang dipelajari") && how.includes("Progress materi diperbarui per Bab"), "landing belum menjelaskan progress per Bab dengan animasi Reveal");
-expect(how.includes("Bab yang dipelajari") && how.includes("Progress materi diperbarui per Bab"), "Cara Kerja landing belum menjelaskan pencatatan progress per Bab");
+expect(how.includes("IntersectionObserver") && how.includes("lg:sticky") && how.includes("Hasil belajar dicatat setiap sesi"), "landing harus menjelaskan laporan sesi dan mempertahankan animasi scroll empat langkah");
+expect(how.includes("Materi yang dipelajari dan laporan tutor") && !how.includes("Mapel, Bab, mode, dan jadwal"), "Cara Kerja harus sesuai alur target belajar tanpa kewajiban memilih Bab");
 
 expect(cheapController.includes("$progressScope") && cheapController.includes("whereHas('order', fn ($orders) => $orders->where('status', 'paid'))"), "scope progress Kelas Kelompok belum dibatasi untuk peserta terverifikasi");
 expect(cheapService.includes("progress_status") && cheapService.includes("chapterProgressSummary") && cheapService.includes("snapshot subjects milik occurrence"), "Kelas Kelompok belum menyimpan progress bab per occurrence");

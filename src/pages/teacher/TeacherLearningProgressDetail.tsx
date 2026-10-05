@@ -30,6 +30,7 @@ type TeacherProgressData = {
   package_name: string;
   package_status?: string | null;
   subject_name: string;
+  learning_goal?: string | null;
   education_level?: string | null;
   grade?: string | null;
   student: { id?: number | null; name: string };
@@ -158,6 +159,9 @@ export default function TeacherLearningProgressDetail() {
   }
 
   const summary = data.progress_summary;
+  const tracksChapters = data.learning_chapters.length > 0;
+  const completedSessions = data.sessions.filter((session) => session.status === "completed").length;
+  const displayedPercent = tracksChapters ? summary.progress_percent : data.allocated_sessions > 0 ? Math.round(completedSessions / data.allocated_sessions * 100) : 0;
 
   return (
     <TeacherLayout title="Progress Kelas">
@@ -177,16 +181,16 @@ export default function TeacherLearningProgressDetail() {
                 </div>
               </div>
               <div className="w-full rounded-2xl border border-white/10 bg-white/[0.08] p-4 backdrop-blur-sm md:max-w-xs">
-                <div className="flex items-end justify-between gap-3"><p className="text-xs font-black uppercase tracking-wider text-slate-300">Progress materi</p><p className="text-3xl font-black text-blue-200">{summary.progress_percent}%</p></div>
-                <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500" style={{ width: `${summary.progress_percent}%` }} /></div>
+                <div className="flex items-end justify-between gap-3"><p className="text-xs font-black uppercase tracking-wider text-slate-300">{tracksChapters ? "Progress materi" : "Pertemuan selesai"}</p><p className="text-3xl font-black text-blue-200">{displayedPercent}%</p></div>
+                <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500" style={{ width: `${displayedPercent}%` }} /></div>
               </div>
             </div>
           </div>
         </section>
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Summary label="Bab selesai" value={`${summary.completed_chapters}/${summary.total_chapters}`} icon={CheckCircle2} />
-          <Summary label="Sedang dipelajari" value={summary.in_progress_chapters} icon={BookOpen} />
+          <Summary label={tracksChapters ? "Bab selesai" : "Pertemuan selesai"} value={tracksChapters ? `${summary.completed_chapters}/${summary.total_chapters}` : `${completedSessions}/${data.allocated_sessions}`} icon={CheckCircle2} />
+          <Summary label={tracksChapters ? "Sedang dipelajari" : "Pelaporan materi"} value={tracksChapters ? summary.in_progress_chapters : "Per sesi"} icon={BookOpen} />
           <Summary label="Sesi dilaporkan" value={`${data.sessions.filter((session) => session.progress_report).length}/${data.allocated_sessions}`} icon={History} />
           <Summary label="Sesi dialokasikan" value={data.allocated_sessions} icon={CalendarDays} />
         </div>
@@ -206,10 +210,11 @@ export default function TeacherLearningProgressDetail() {
 function MaterialPanel({ data }: { data: TeacherProgressData }) {
   return (
     <section className="rounded-[1.75rem] border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/35 to-blue-50/45 p-4 shadow-[0_14px_36px_rgba(30,64,175,0.07)] sm:p-6">
-      <div><h2 className="text-lg font-black text-slate-900">Kondisi materi saat ini</h2><p className="mt-1 text-sm leading-6 text-slate-500">Progress ditampilkan per Bab agar posisi belajar murid cepat dibaca. Riwayat Sesi menjelaskan kapan perubahan tersebut terjadi.</p></div>
+      <div><h2 className="text-lg font-black text-slate-900">Target dan hasil belajar</h2><p className="mt-1 text-sm leading-6 text-slate-500">{data.learning_chapters.length ? "Progress ditampilkan per Bab. Riwayat Sesi menjelaskan kapan perubahan tersebut terjadi." : "Materi disesuaikan dengan kebutuhan murid. Persentase pertemuan selesai bukan penilaian penguasaan materi; penilaian tutor dicatat pada laporan masing-masing sesi."}</p></div>
+      {data.learning_goal && <div className="mt-4 rounded-xl bg-white p-4"><p className="text-xs font-black text-indigo-700">Target atau materi yang ingin difokuskan</p><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{data.learning_goal}</p></div>}
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         {data.learning_chapters.map((chapter) => <ChapterRow key={`${chapter.curriculum_chapter_id || chapter.chapter}`} chapter={chapter} />)}
-        {data.learning_chapters.length === 0 && <p className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500 sm:col-span-2">Bab belum tersedia pada paket ini.</p>}
+        {data.learning_chapters.length === 0 && <p className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500 sm:col-span-2">Pesanan ini tidak memakai pilihan Bab. Catat materi yang dibahas, hasil belajar, dan latihan berikutnya pada laporan sesi.</p>}
       </div>
     </section>
   );
@@ -254,7 +259,7 @@ function HistoryPanel({ data, onOpenSession }: { data: TeacherProgressData; onOp
                         </div>
                       ))}
                     </div>
-                  ) : !report.no_material_change ? <p className="mt-3 rounded-xl bg-white p-3 text-sm text-slate-500">Tidak ada perubahan Bab terstruktur pada laporan ini.</p> : null}
+                  ) : !report.no_material_change ? <p className="mt-3 rounded-xl bg-white p-3 text-sm text-slate-500">{report.mastered_skills} Latihan berikutnya: {report.next_exercise}</p> : null}
                   {report.notes && <p className="mt-3 rounded-xl bg-white p-3 text-sm leading-6 text-slate-600"><b>Catatan:</b> {report.notes}</p>}
                   {session.booking_id && <Button type="button" variant="outline" onClick={() => onOpenSession(session.booking_id!)} className="mt-4 rounded-xl border-indigo-100 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"><MessageSquareText size={16} className="mr-2" />Lihat laporan lengkap</Button>}
                 </>

@@ -20,7 +20,7 @@ class RefundSettlementService
 
     public function isAutomatic(Refund $refund): bool
     {
-        return $refund->source_type === 'teacher_replacement'
+        return in_array($refund->source_type, ['teacher_replacement', 'late_gateway_payment'], true)
             || in_array(mb_strtolower(trim((string) $refund->reason)), [
                 'tutor tidak ditemukan',
                 'paket dibatalkan murid saat pencarian tutor',
@@ -30,42 +30,67 @@ class RefundSettlementService
     public function startAutomatic(Refund $refund): bool
     {
         $refund->refresh()->loadMissing('order');
-        if (! $this->isAutomatic($refund)) return false;
-        if ($refund->status === 'paid') return true;
-        if ($refund->status !== 'pending') return false;
-        if (! $refund->destination_selected_at) return false;
+        if (! $this->isAutomatic($refund)) {
+            return false;
+        }
+        if ($refund->status === 'paid') {
+            return true;
+        }
+        if ($refund->status !== 'pending') {
+            return false;
+        }
+        if (! $refund->destination_selected_at) {
+            return false;
+        }
 
         if ($refund->destination_method === 'bimbelku_balance') {
             $this->settle($refund, 'bimbelku_balance');
+
             return true;
         }
-        if ($refund->destination_method !== 'xendit_original') return false;
+        if ($refund->destination_method !== 'xendit_original') {
+            return false;
+        }
 
         $breakdown = $refund->tenderBreakdown();
         if ($breakdown['external_funded_amount'] <= 0.009) {
             $this->settle($refund, 'bimbelku_balance');
+
             return true;
         }
         if ($refund->order?->payment_provider !== 'xendit') {
             $this->notifyManualReview($refund);
+
             return false;
         }
 
         try {
+            if ($refund->source_type === 'late_gateway_payment' && blank($refund->order->gateway_payment_request_id)) {
+                // Some completion callbacks omit the original payment request.
+                // Recover it server-to-server, including on scheduled retries.
+                $session = app(XenditPaymentService::class)->fetchSession($refund->order);
+                $refund->order->forceFill([
+                    'gateway_payment_request_id' => $session['payment_request_id'] ?? data_get($session, 'payment_request.id'),
+                    'gateway_payment_id' => $session['payment_id'] ?? data_get($session, 'payment.id') ?? $refund->order->gateway_payment_id,
+                ])->save();
+            }
             $this->gateway->createRefund($refund);
         } catch (\Throwable $exception) {
             report($exception);
             $this->notifyManualReview($refund);
+
             return false;
         }
         $refund->refresh();
         if (in_array($refund->gateway_status, ['FAILED', 'REJECTED'], true) || blank($refund->gateway_refund_id)) {
             $this->notifyManualReview($refund);
+
             return false;
         }
         if ($refund->gateway_status === 'SUCCEEDED') {
             $this->settle($refund, 'xendit_original');
         }
+
         return true;
     }
 
@@ -78,22 +103,25 @@ class RefundSettlementService
             'type' => 'warning',
             'target_url' => '/student/history',
         ]);
-        User::query()->where('role', 'admin')->pluck('id')->each(fn (int $adminId) =>
-            Notification::firstOrCreate(['unique_key' => "refund-review:{$refund->id}:{$adminId}"], [
-                'user_id' => $adminId,
-                'title' => 'Refund perlu ditangani',
-                'message' => "Refund {$refund->refund_code} memerlukan penanganan manual.",
-                'type' => 'warning',
-                'target_url' => '/admin/finance?tab=refunds',
-            ])
+        User::query()->where('role', 'admin')->pluck('id')->each(fn (int $adminId) => Notification::firstOrCreate(['unique_key' => "refund-review:{$refund->id}:{$adminId}"], [
+            'user_id' => $adminId,
+            'title' => 'Refund perlu ditangani',
+            'message' => "Refund {$refund->refund_code} memerlukan penanganan manual.",
+            'type' => 'warning',
+            'target_url' => '/admin/finance?tab=refunds',
+        ])
         );
     }
 
     public function reconcile(Refund $refund): bool
     {
         $refund->refresh()->loadMissing('order');
-        if ($refund->status === 'paid') return true;
-        if ($refund->status !== 'pending' || $refund->destination_method !== 'xendit_original') return false;
+        if ($refund->status === 'paid') {
+            return true;
+        }
+        if ($refund->status !== 'pending' || $refund->destination_method !== 'xendit_original') {
+            return false;
+        }
 
         try {
             $this->gateway->retrieveRefund($refund);
@@ -101,22 +129,28 @@ class RefundSettlementService
             report($exception);
             $isStale = ($refund->gateway_submitted_at ?: $refund->created_at)?->lt(now()->subDay());
             $refund->forceFill(['last_reconciled_at' => now()])->save();
-            if ($isStale) $this->notifyManualReview($refund);
+            if ($isStale) {
+                $this->notifyManualReview($refund);
+            }
+
             return false;
         }
 
         $refund->refresh();
         if ($refund->gateway_status === 'SUCCEEDED') {
             $this->settle($refund, 'xendit_original');
+
             return true;
         }
         if (in_array($refund->gateway_status, ['FAILED', 'REJECTED'], true)) {
             $this->notifyManualReview($refund);
+
             return false;
         }
         if (($refund->gateway_submitted_at ?: $refund->created_at)?->lt(now()->subDay())) {
             $this->notifyManualReview($refund);
         }
+
         return true;
     }
 
@@ -136,7 +170,9 @@ class RefundSettlementService
                 'order.participant.bookingRequest', 'order.cheapClassEnrollment', 'booking',
             ])->lockForUpdate()->findOrFail($refund->id);
 
-            if ($locked->status === 'paid') return;
+            if ($locked->status === 'paid') {
+                return;
+            }
             abort_unless($locked->status === 'pending', 422, 'Refund ini sudah tidak dapat diproses.');
             abort_unless(in_array($destinationMethod, ['xendit_original', 'bank_transfer', 'bimbelku_balance'], true), 422, 'Tujuan refund tidak valid.');
 
@@ -173,6 +209,10 @@ class RefundSettlementService
                 $locked->order->participant?->update(['status' => 'refunded']);
                 $locked->order->participant?->bookingRequest?->update(['status' => 'refunded']);
                 $locked->order->cheapClassEnrollment?->update(['status' => 'refunded']);
+                if ($locked->source_type === 'late_gateway_payment') {
+                    $locked->order->learningPackage?->update(['status' => 'refunded']);
+                    $locked->order->learningPackage?->subjects()->update(['status' => 'refunded']);
+                }
             } else {
                 $this->partialPackageRefunds->completeTeacherReplacementRefund($locked->fresh());
             }
@@ -212,7 +252,9 @@ class RefundSettlementService
 
     private function restorePromotionClaim(Order $order, string $reason): void
     {
-        if (! in_array(mb_strtolower(trim($reason)), ['keadaan darurat tutor', 'keberatan murid disetujui', 'tutor tidak hadir'], true) || ! $order->learning_package_id) return;
+        if (! in_array(mb_strtolower(trim($reason)), ['keadaan darurat tutor', 'keberatan murid disetujui', 'tutor tidak hadir'], true) || ! $order->learning_package_id) {
+            return;
+        }
         PromotionClaim::query()->where('order_id', $order->id)->where('status', 'used')->update([
             'status' => 'available', 'order_id' => null, 'learning_package_id' => null,
             'used_at' => null, 'released_at' => now(),

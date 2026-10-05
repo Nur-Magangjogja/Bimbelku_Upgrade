@@ -2,12 +2,12 @@ import { useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import SeoHead from "@/components/SeoHead";
 
-const privatePath = /^(?:\/admin(?:\/|$)|\/guru(?:\/|$)|\/student(?:\/|$)|\/payment$|\/pesanan\/|\/pesan$|\/login$|\/register$|\/forgot-password$|\/reset-password$|\/verify-email$|\/oauth\/|\/complete-profile$|\/access-denied$)/;
+const privatePath = /^(?:\/admin(?:\/|$)|\/guru(?:\/|$)|\/student(?:\/|$)|\/payment(?:-preview)?$|\/pesanan\/|\/pesan$|\/login$|\/register$|\/forgot-password$|\/reset-password$|\/verify-email$|\/oauth\/|\/complete-profile$|\/access-denied$)/;
 
 const publicMeta: Record<string, { title: string; description: string }> = {
   "/": {
     title: "Bimbel Privat SD, SMP & SMA di Yogyakarta | BimbelKu",
-    description: "Bimbel privat online dan tatap muka untuk SD, SMP, dan SMA di Yogyakarta. Pilih mapel, Bab, jadwal, serta mode belajar sebelum memesan tutor.",
+    description: "Bimbel privat online dan tatap muka untuk SD, SMP, dan SMA di Yogyakarta. Pilih mapel, jelaskan target, jadwal, serta mode belajar sebelum memesan tutor.",
   },
   "/program": {
     title: "Program Bimbel dan Les Privat SD–SMA | BimbelKu",

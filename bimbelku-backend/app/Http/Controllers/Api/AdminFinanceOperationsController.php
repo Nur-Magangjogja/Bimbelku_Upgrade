@@ -128,7 +128,7 @@ class AdminFinanceOperationsController extends Controller
             });
         }
 
-        $refunds = $query->latest()->limit(300)->get()->map(function (Refund $refund) {
+        $formatRefund = function (Refund $refund) {
             // Hanya tampilkan snapshot yang benar-benar dipilih murid. Data
             // rekening pengirim pembayaran bukan lagi tujuan refund otomatis.
             $bankName = $refund->destination_bank_name;
@@ -139,6 +139,17 @@ class AdminFinanceOperationsController extends Controller
                 ? $refund->order->class_details_snapshot
                 : [];
             $breakdown = $refund->tenderBreakdown();
+            $needsAction = $refund->status === 'pending'
+                && $refund->destination_selected_at !== null
+                && (in_array($refund->destination_method, ['bank_transfer', 'bimbelku_balance'], true)
+                    || in_array($refund->gateway_status, ['FAILED', 'REJECTED'], true)
+                    || ($refund->destination_method === 'xendit_original' && $refund->created_at?->lte(now()->subDay())));
+            $actionLabel = $needsAction ? match (true) {
+                $refund->destination_method === 'bank_transfer' => 'Perlu transfer',
+                $refund->destination_method === 'bimbelku_balance' => 'Perlu kredit saldo',
+                in_array($refund->gateway_status, ['FAILED', 'REJECTED'], true) => 'Pengiriman gagal',
+                default => 'Perlu cek status',
+            } : null;
 
             return [
                 'id' => $refund->id,
@@ -155,6 +166,8 @@ class AdminFinanceOperationsController extends Controller
                 'external_funded_amount' => $breakdown['external_funded_amount'],
                 'reason' => $refund->reason,
                 'status' => $refund->status,
+                'needs_action' => $needsAction,
+                'action_label' => $actionLabel,
                 'payment_provider' => $refund->payment_provider,
                 'gateway_status' => $refund->gateway_status,
                 'gateway_failure_code' => $refund->gateway_failure_code,
@@ -184,7 +197,26 @@ class AdminFinanceOperationsController extends Controller
                 'created_at' => $refund->created_at,
                 'updated_at' => $refund->updated_at,
             ];
-        })->values();
+        };
+
+        // Separate limits keep old history in its original newest-first order,
+        // even when the pending queue grows. Prioritize actionable pending
+        // refunds before limiting that queue.
+        $pendingRefunds = (clone $query)
+            ->where('status', 'pending')
+            ->orderByRaw("CASE WHEN destination_selected_at IS NOT NULL AND (destination_method IN ('bank_transfer', 'bimbelku_balance') OR gateway_status IN ('FAILED', 'REJECTED') OR (destination_method = 'xendit_original' AND created_at <= ?)) THEN 0 ELSE 1 END", [now()->subDay()])
+            ->latest()
+            ->limit(300)
+            ->get()
+            ->map($formatRefund)
+            ->values();
+        $historyRefunds = (clone $query)
+            ->where('status', '!=', 'pending')
+            ->latest()
+            ->limit(300)
+            ->get()
+            ->map($formatRefund)
+            ->values();
 
         $recentPaidRefunds = Refund::query()
             ->with('order:id,amount,wallet_applied_amount')
@@ -210,8 +242,8 @@ class AdminFinanceOperationsController extends Controller
                 'wallet_credited_30_days' => $walletCredited30Days,
                 'wallet_liability' => round((float) CustomerWallet::query()->selectRaw('COALESCE(SUM(current_balance + reserved_balance), 0) AS total')->value('total'), 2),
             ],
-            'pending' => $refunds->where('status', 'pending')->values(),
-            'history' => $refunds->where('status', '!=', 'pending')->values(),
+            'pending' => $pendingRefunds,
+            'history' => $historyRefunds,
             'generated_at' => now()->toIso8601String(),
         ]);
     }

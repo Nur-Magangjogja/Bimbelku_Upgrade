@@ -33,11 +33,11 @@ export default function DashboardPreviewSection() {
             <h2 className="mt-4 max-w-xl text-3xl font-black leading-tight text-white md:text-4xl">{cms?.title || "Orang tua tahu apa yang dipelajari, siswa tahu apa berikutnya."}</h2>
           </Reveal>
           <Reveal direction="right" delay={0.16} width="100%">
-            <p className="mt-4 max-w-xl leading-7 text-slate-300">{cms?.description || "Perkembangan materi tersusun per paket dan per Bab, dengan laporan sesi saat tersedia."}</p>
+            <p className="mt-4 max-w-xl leading-7 text-slate-300">{cms?.description || "Target dan hasil belajar tersusun per paket, dengan laporan tutor setiap sesi."}</p>
           </Reveal>
           <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
             <Reveal direction="right" delay={0.22} width="100%"><Point icon={Layers3} text="Halaman awal tersusun per Paket Belajar atau Kelas Bersama" /></Reveal>
-            <Reveal direction="right" delay={0.3} width="100%"><Point icon={BookOpenCheck} text="Paket Belajar menunjukkan progress per Bab" /></Reveal>
+            <Reveal direction="right" delay={0.3} width="100%"><Point icon={BookOpenCheck} text="Paket Belajar menyimpan target dan laporan hasil setiap sesi" /></Reveal>
             <Reveal direction="right" delay={0.38} width="100%"><Point icon={Users} text="Kelas Bersama cukup menunjukkan progress per Bab" /></Reveal>
           </div>
         </div>
@@ -77,7 +77,7 @@ function DesktopProgressPreview() {
 
       <div className="mt-4 grid gap-3">
         <Reveal delay={0.28} width="100%">
-          <DarkPreviewProgram badge="Paket Belajar" title="Intensif Matematika" subtitle="Aljabar · Persamaan Linear" progress={67} meta="5 dari 8 Bab selesai" />
+          <DarkPreviewProgram badge="Paket Belajar" title="Intensif Matematika" subtitle="Aljabar · Persamaan Linear" progress={67} meta="4 dari 6 pertemuan selesai" />
         </Reveal>
         <Reveal delay={0.38} width="100%">
           <DarkPreviewProgram badge="Kelas Bersama" title="TKA Matematika" subtitle="Belajar bersama · Online" progress={50} meta="2 dari 4 bab selesai" cheap />
@@ -86,7 +86,7 @@ function DesktopProgressPreview() {
 
       <Reveal delay={0.48} width="100%">
         <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-xs">
-          <span className="flex min-w-0 items-start gap-2 font-bold leading-5 text-slate-300"><CheckCircle2 size={15} className="mt-0.5 shrink-0 text-emerald-400" />Progress materi tidak disamakan dengan jumlah sesi.</span>
+          <span className="flex min-w-0 items-start gap-2 font-bold leading-5 text-slate-300"><CheckCircle2 size={15} className="mt-0.5 shrink-0 text-emerald-400" />Pertemuan selesai dan penilaian materi tutor ditampilkan terpisah.</span>
           <ArrowRight size={15} className="shrink-0 text-orange-300" />
         </div>
       </Reveal>
@@ -110,13 +110,13 @@ function MobileProgressPreview() {
       </div>
 
       <div className="mt-3 space-y-2.5">
-        <MobileProgram badge="Paket Belajar" title="Intensif Matematika" progress={67} meta="5/8 Bab selesai" />
+        <MobileProgram badge="Paket Belajar" title="Intensif Matematika" progress={67} meta="4/6 pertemuan selesai" />
         <MobileProgram badge="Kelas Bersama" title="TKA Matematika" progress={50} meta="2/4 bab selesai" cheap />
       </div>
 
       <div className="mt-3 flex items-start gap-2 rounded-xl border border-white/10 bg-white/[0.05] p-3 text-[10px] font-semibold leading-4 text-slate-300">
         <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-400" />
-        <span>Progress materi dihitung dari materi yang selesai, bukan jumlah sesi.</span>
+        <span>Persentase paket menunjukkan pertemuan selesai. Penguasaan materi dilihat dari laporan tutor.</span>
       </div>
     </div>
   );

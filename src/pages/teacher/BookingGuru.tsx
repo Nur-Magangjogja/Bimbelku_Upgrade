@@ -331,7 +331,7 @@ function OfferCard({
         <div className="mt-4 rounded-2xl bg-slate-50 p-4">
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Kebutuhan belajar</p>
           {request.chapter && <p className="mt-2 text-sm font-black text-slate-800">{request.chapter}</p>}
-          {request.learning_goal && <p className="mt-2 text-sm leading-6 text-slate-700"><span className="font-bold">Catatan:</span> {request.learning_goal}</p>}
+          {request.learning_goal && <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700"><span className="font-bold">Target belajar:</span> {request.learning_goal}</p>}
         </div>
       )}
 
@@ -354,7 +354,7 @@ function OfferCard({
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Estimasi pendapatan tutor</p>
           <p className="mt-1 text-lg font-black text-slate-900">{formatCurrency(request.estimated_net_amount)}</p>
           <p className="mt-1 text-[10px] font-medium text-slate-400">
-            {request.package_subject ? "Nilai seluruh sesi mapel" : "Nilai sesi"} {formatCurrency(request.total_amount)} · komisi platform {request.commission_percent ?? 20}%
+            {request.package_subject ? "Alokasi seluruh sesi mapel ini (bukan total program)" : "Nilai sesi"} {formatCurrency(request.total_amount)} · komisi platform {request.commission_percent ?? 20}%
           </p>
         </div>
         {isPending && (

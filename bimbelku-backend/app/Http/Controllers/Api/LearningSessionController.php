@@ -362,7 +362,9 @@ class LearningSessionController extends Controller
             ->first();
         $packageChapters = $packageSession?->subject?->chapters ?? collect();
         $chapterSummary = PackageChapterProgress::summary($packageChapters);
-        $materialProgress = (int) $chapterSummary['progress_percent'];
+        $materialProgress = $packageChapters->isNotEmpty()
+            ? (int) $chapterSummary['progress_percent']
+            : (int) ($booking->learningProgressReports->last()?->progress_percent ?? 0);
         $currentChapterLogs = $packageSession
             ? PackageSessionChapterLog::query()->where('package_session_id', $packageSession->id)->with('chapter')->get()
             : collect();
@@ -754,22 +756,29 @@ class LearningSessionController extends Controller
             'chapter_updates.*.status_after' => ['required', Rule::in(['in_progress', 'completed'])],
             'chapter_updates.*.needs_review' => ['nullable', 'boolean'],
             'chapter_updates.*.notes' => ['nullable', 'string', 'max:1000'],
-            // Hanya dipakai sebagai fallback untuk booking privat lama yang tidak
-            // terhubung ke PackageSession. Paket Belajar tetap menghitung progress
-            // dari status Bab, bukan menerima persentase mentah dari klien.
+            // Paket tanpa Bab memakai penilaian materi tutor. Paket dengan Bab
+            // tetap menghitung progress dari perubahan status Bab.
             'progress_percent' => ['nullable', 'integer', 'min:0', 'max:100'],
             'notes' => ['nullable', 'string', 'max:3000'],
         ]);
 
         $packageSession = PackageSession::query()
             ->where('booking_id', $booking->id)
-            ->with('subject.chapters')
+            ->with(['subject.chapters', 'subject.package'])
             ->first();
         $packageChapters = $packageSession?->subject?->chapters ?? collect();
+        // A new focus-only order has no declared chapter selection. If an old
+        // chapter-based order loses its rows, do not silently bypass its progress.
+        $requiresLegacyChapters = $packageSession
+            && ! $packageSession->subject?->package?->learning_program_id
+            && (filled($packageSession->subject?->chapter)
+                || ! empty($packageSession->subject?->curriculum_chapter_ids));
+        abort_if($requiresLegacyChapters && $packageChapters->isEmpty(), 422, 'Katalog Bab paket tidak tersedia. Hubungi admin.');
+        $packageWithoutChapters = $packageSession && $packageChapters->isEmpty();
+        $tracksChapters = $packageSession && $packageChapters->isNotEmpty();
 
         $noMaterialChange = (bool) ($validated['no_material_change'] ?? false);
-        if ($packageSession) {
-            abort_if($packageChapters->isEmpty(), 422, 'Katalog Bab paket tidak tersedia. Hubungi admin.');
+        if ($tracksChapters) {
             if (!$noMaterialChange && empty($validated['chapter_updates'])) {
                 throw ValidationException::withMessages(['chapter_updates' => 'Pilih sedikitnya satu Bab yang dibahas.']);
             }
@@ -778,6 +787,15 @@ class LearningSessionController extends Controller
             }
             if ($noMaterialChange) $validated['chapter_updates'] = [];
             else $validated['no_change_reason'] = null;
+        } elseif ($packageWithoutChapters) {
+            if (! empty($validated['chapter_updates'])) {
+                throw ValidationException::withMessages([
+                    'chapter_updates' => 'Pesanan ini memakai target belajar tanpa pilihan Bab. Isi materi yang dibahas dan hasil belajar.',
+                ]);
+            }
+            $validated['chapter_updates'] = [];
+            $validated['no_material_change'] = false;
+            $validated['no_change_reason'] = null;
         } else {
             // Tidak menghidupkan kembali BookingRequest UI lama. Ini hanya menjaga
             // Session Flow V2 tetap dapat menutup row booking privat lama yang sudah
@@ -797,7 +815,7 @@ class LearningSessionController extends Controller
         $validated['attendance'] = $participantAttendance->status;
         $durationMinutes = max(1, $attendance->check_in_at->diffInMinutes($attendance->check_out_at));
 
-        $report = DB::transaction(function () use ($booking, $request, $validated, $durationMinutes, $studentId, $packageSession, $packageChapters) {
+        $report = DB::transaction(function () use ($booking, $request, $validated, $durationMinutes, $studentId, $packageSession, $packageChapters, $tracksChapters) {
             if (LearningProgressReport::query()->where('booking_id', $booking->id)->where('student_id', $studentId)->lockForUpdate()->exists()) {
                 throw ValidationException::withMessages(['session' => 'Hasil belajar sesi ini sudah tersimpan.']);
             }
@@ -808,7 +826,7 @@ class LearningSessionController extends Controller
             $submittedProgressPercent = (int) ($validated['progress_percent'] ?? 0);
             unset($validated['chapter_updates'], $validated['progress_percent']);
 
-            if ($packageSession) {
+            if ($tracksChapters) {
                 $chaptersByName = $packageChapters->keyBy(fn (PackageChapter $chapter) => trim((string) $chapter->title));
 
                 foreach ($chapterUpdates as $update) {

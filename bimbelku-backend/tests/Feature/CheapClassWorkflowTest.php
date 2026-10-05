@@ -99,6 +99,8 @@ class CheapClassWorkflowTest extends TestCase
         $student = User::factory()->create(['role' => 'student', 'status' => 'active']);
         [$enrollment, $order] = app(CheapClassService::class)->join($class, $student);
 
+        $this->assertEqualsWithDelta(3600, $enrollment->seat_expires_at->getTimestamp() - $enrollment->created_at->getTimestamp(), 1);
+
         $this->assertSame($class->id, $enrollment->cheap_class_id);
         $this->assertSame('75000.00', $order->amount);
         $this->assertSame(1, Order::query()->where('cheap_class_enrollment_id', $enrollment->id)->count());

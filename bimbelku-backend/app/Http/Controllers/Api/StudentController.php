@@ -16,9 +16,14 @@ class StudentController extends Controller
         $order = Order::query()
             ->where('user_id', $request->user()->id)
             ->where(function ($query) use ($id) {
-                $query->whereKey($id)->orWhere('order_id', $id);
+                // Numeric return IDs refer only to the primary key, never another invoice number.
+                if (ctype_digit($id)) {
+                    $query->whereKey($id);
+                } else {
+                    $query->where('order_id', $id);
+                }
             })
-            ->with(['refund', 'cheapClassEnrollment.cheapClass'])
+            ->with(['refund', 'learningPackage.plan', 'cheapClassEnrollment.cheapClass'])
             ->first();
 
         if (!$order) {
@@ -53,10 +58,26 @@ class StudentController extends Controller
             && $order->status === 'submitted'
             && $refundReasonIfAccepted !== null;
 
+        $details = is_array($order->class_details_snapshot)
+            ? $order->class_details_snapshot
+            : (json_decode((string) $order->class_details_snapshot, true) ?: []);
+
         return response()->json([
             'status' => $order->status,
             'id' => $order->id,
             'order_id' => $order->order_id,
+            'order_number' => $order->order_id,
+            'amount' => $order->amount,
+            'subtotal_amount' => $order->subtotal_amount,
+            'discount_amount' => $order->discount_amount,
+            'payment_due_at' => $order->top_up_due_at ?? $order->learningPackage?->payment_due_at ?? $cheapEnrollment?->seat_expires_at,
+            'subject' => $details['subject'] ?? 'Kelas',
+            'tutor_name' => $details['teacher_name'] ?? 'Tutor dipilih setelah pembayaran',
+            'type' => ucfirst((string) ($details['method'] ?? 'online')).' · '.($isCheapClass ? 'Kelas Bersama' : ($order->learning_package_id ? 'Paket Belajar' : 'Privat 1-on-1')),
+            'scheduled_at' => $details['start_at'] ?? null,
+            'package_name' => $details['package_name'] ?? $order->learningPackage?->plan?->name,
+            'duration_hours' => (int) ($details['duration_hours'] ?? $order->learningPackage?->duration_hours ?? 1),
+            'total_learning_hours' => (int) ($details['total_learning_hours'] ?? 0),
             'has_proof' => !empty($order->payment_proof),
             'rejection_reason' => $order->payment_rejection_reason,
             'order_kind' => $isCheapClass ? 'cheap_class' : ($order->learning_package_id ? 'package' : 'booking'),

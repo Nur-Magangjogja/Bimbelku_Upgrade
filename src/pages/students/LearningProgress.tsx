@@ -170,20 +170,20 @@ function PackageProgressCard({ item }: { item: StudentPackageProgress }) {
         </div>
 
         <div className="mt-4 rounded-2xl border border-indigo-100/80 bg-white/85 p-4 shadow-[0_8px_24px_rgba(79,70,229,0.06)] backdrop-blur-sm">
-          <div className="flex items-center justify-between gap-3"><span className="text-xs font-black text-slate-700">Progress target</span><span className="text-sm font-black text-indigo-700">{stats.percent}%</span></div>
+          <div className="flex items-center justify-between gap-3"><span className="text-xs font-black text-slate-700">{stats.tracksChapters ? "Progress materi" : "Pertemuan selesai"}</span><span className="text-sm font-black text-indigo-700">{stats.percent}%</span></div>
           <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-indigo-50"><div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-[width] duration-500" style={{ width: `${stats.percent}%` }} /></div>
           <div className="mt-3 grid gap-2 border-t border-indigo-100 pt-3 sm:grid-cols-[1fr_auto] sm:items-end">
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Fokus materi saat ini</p>
-              <p className="mt-1 line-clamp-2 text-sm font-bold leading-5 text-slate-700">{nextChapter ? nextChapter.chapter : stats.total > 0 ? "Seluruh Bab sudah selesai" : "Materi belum disusun"}</p>
+              <p className="mt-1 line-clamp-2 text-sm font-bold leading-5 text-slate-700">{nextChapter ? nextChapter.chapter : stats.total > 0 ? "Seluruh Bab sudah selesai" : (item.subjects || []).map((subject) => subject.learning_goal).filter(Boolean).join(" · ") || "Materi disesuaikan bersama tutor"}</p>
             </div>
-            <p className="text-[11px] font-bold text-slate-400">{stats.completed}/{stats.total} Bab selesai</p>
+            <p className="text-[11px] font-bold text-slate-400">{stats.tracksChapters ? `${stats.completed}/${stats.total} Bab selesai` : "Hasil belajar dicatat per sesi"}</p>
           </div>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-semibold text-slate-500">
           <span className="inline-flex items-center gap-1.5"><CalendarDays size={14} className="text-indigo-500" />{item.used_sessions}/{item.total_sessions} pertemuan selesai</span>
-          <span className="inline-flex items-center gap-1.5"><History size={14} className="text-indigo-500" />{stats.inProgress} Bab sedang dipelajari</span>
+          {stats.tracksChapters && <span className="inline-flex items-center gap-1.5"><History size={14} className="text-indigo-500" />{stats.inProgress} Bab sedang dipelajari</span>}
         </div>
 
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

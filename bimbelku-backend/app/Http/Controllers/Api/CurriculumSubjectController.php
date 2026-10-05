@@ -145,6 +145,7 @@ class CurriculumSubjectController extends Controller
             'grades.*' => ['required', 'string', 'max:50'],
             'is_elective' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
+            'show_chapter_selection' => ['sometimes', 'boolean'],
             'curriculum_name' => ['sometimes', 'string', 'max:100'],
             'edition' => ['nullable', 'string', 'max:80'],
             'source_url' => ['nullable', 'url:http,https', 'max:500'],

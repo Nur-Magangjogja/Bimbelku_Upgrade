@@ -11,7 +11,7 @@ const pages = {
   "panduan-memilih-program": {
     eyebrow: "Memilih program",
     title: "Mulai dari kebutuhan belajar, bukan nama paket yang paling ramai.",
-    intro: "Pilih jenjang, mata pelajaran, Bab, target, dan mode belajar yang benar-benar dibutuhkan. Detail ini diteruskan ke form pesanan dan proses pencarian tutor.",
+    intro: "Pilih jenjang, mata pelajaran, target atau materi yang ingin difokuskan, dan mode belajar yang benar-benar dibutuhkan. Detail ini diteruskan ke form pesanan dan proses pencarian tutor.",
     icon: BookOpenCheck,
     points: ["Katalog dikelompokkan berdasarkan jenjang dan bidang", "Profil mapel menjelaskan cakupan materi serta cara belajar", "Pilihan program dapat langsung mengisi awal form paket"],
   },
@@ -41,7 +41,7 @@ const pages = {
     title: "Privat tatap muka, dari alamat sampai kelas pertama.",
     intro: "Pahami syarat lokasi, jangkauan tutor, peserta, materi, biaya, dan langkah setelah pembayaran sebelum memilih kelas tatap muka.",
     icon: MapPin,
-    points: ["Alamat dan titik lokasi diminta sebelum pesanan diselesaikan", "Tutor hanya menerima penawaran yang sesuai area dan jadwal", "Materi dan Bab yang dipilih ikut terbawa ke proses matching"],
+    points: ["Alamat dan titik lokasi diminta sebelum pesanan diselesaikan", "Tutor hanya menerima penawaran yang sesuai area dan jadwal", "Target dan materi yang ditulis ikut terbawa ke proses matching"],
   },
   "privat-online": {
     eyebrow: "Panduan privat online",
@@ -60,7 +60,7 @@ const pages = {
 } as const;
 
 const steps = [
-  { icon: BookOpenCheck, title: "Kebutuhan", text: "Pilih peserta, jenjang, mapel, Bab, dan target belajar." },
+  { icon: BookOpenCheck, title: "Kebutuhan", text: "Pilih peserta, jenjang, mapel, dan jelaskan target belajar." },
   { icon: CalendarCheck, title: "Jadwal", text: "Tentukan durasi, hari, jam, mode, dan lokasi bila tatap muka." },
   { icon: CreditCard, title: "Pembayaran", text: "Periksa ringkasan, hubungkan akun, lalu selesaikan pembayaran." },
   { icon: Radar, title: "Matching", text: "Sistem menawarkan kebutuhan secara berurutan kepada tutor yang memenuhi syarat." },
@@ -76,7 +76,7 @@ const guideGroups: { eyebrow: string; title: string; description: string; slugs:
   {
     eyebrow: "Siapkan pesanan",
     title: "Ubah kebutuhan menjadi rencana yang dapat diperiksa",
-    description: "Mulai dari mapel dan Bab, lalu pastikan peserta, paket, serta jadwalnya jelas.",
+    description: "Mulai dari mapel dan kebutuhan belajar, lalu pastikan peserta, paket, serta jadwalnya jelas.",
     slugs: ["panduan-memilih-program", "cara-pemesanan"],
   },
   {
@@ -102,11 +102,11 @@ type Guide = {
 const guides: Record<keyof typeof pages, Guide> = {
   "panduan-memilih-program": {
     question: "Anak kesulitan pada satu Bab, tetapi belum tahu harus memilih program apa?",
-    suitable: "Cocok untuk keluarga yang sudah mengetahui jenjang siswa dan ingin mempersempit kebutuhan ke mapel, Bab, serta target yang terukur.",
+    suitable: "Cocok untuk keluarga yang sudah mengetahui jenjang siswa dan ingin mempersempit kebutuhan ke mapel, materi, serta target yang terukur.",
     unsuitable: "Kurang cocok bila kebutuhan utama adalah diagnosis klinis, terapi, atau layanan pendidikan khusus yang memerlukan tenaga berlisensi.",
-    actions: ["Tentukan jenjang dan kelas agar daftar mapel sesuai kurikulum siswa.", "Buka profil mapel; cocokkan Bab yang tersedia dengan buku, tugas, atau hasil evaluasi sekolah.", "Tulis target belajar yang bisa diamati, misalnya mampu menyelesaikan soal pecahan bertahap, bukan hanya ‘meningkatkan nilai’.", "Pilih mode, durasi, dan jadwal yang bisa dijalankan konsisten sebelum melihat harga paket."],
-    example: "Siswa kelas 8 tertinggal pada persamaan linear. Orang tua memilih Matematika SMP, Bab terkait, lalu menulis target ‘dapat menjelaskan langkah penyelesaian dan mengerjakan lima soal mandiri’. Tutor menerima konteks itu saat penawaran.",
-    limit: "Pilihan Bab di katalog mengikuti data program aktif. Jika Bab yang dicari belum ada, jangan pilih Bab lain hanya agar form bisa dikirim; hubungi tim melalui WhatsApp untuk memastikan cakupannya.",
+    actions: ["Tentukan jenjang dan kelas agar daftar mapel sesuai kurikulum siswa.", "Buka profil mapel; cocokkan cakupan materi dengan buku, tugas, atau hasil evaluasi sekolah. Katalog Bab hanya referensi.", "Tulis target belajar yang bisa diamati, misalnya mampu menyelesaikan soal pecahan bertahap, bukan hanya ‘meningkatkan nilai’.", "Pilih mode, durasi, dan jadwal yang bisa dijalankan konsisten sebelum melihat harga paket."],
+    example: "Siswa kelas 8 tertinggal pada persamaan linear. Orang tua memilih Matematika SMP, lalu menulis target ‘dapat menjelaskan langkah penyelesaian dan mengerjakan lima soal mandiri’. Tutor menerima konteks itu saat penawaran.",
+    limit: "Murid tidak wajib memilih Bab dari katalog. Tulis materi dengan bahasamu sendiri pada kolom Target atau materi yang ingin difokuskan. Jika belum tahu materi spesifiknya, jelaskan kesulitan atau kebutuhan mengikuti pelajaran sekolah.",
     faqs: [{ question: "Apakah bisa memilih lebih dari satu mapel?", answer: "Form paket mendukung beberapa mapel dengan alokasi sesi untuk masing-masing mapel." }, { question: "Apakah target harus berupa nilai ujian?", answer: "Tidak. Kemampuan menjelaskan konsep atau menyelesaikan jenis soal tertentu biasanya lebih jelas untuk disampaikan kepada tutor." }],
     related: ["cara-pemesanan", "privat-online"], cta: { label: "Jelajahi program", to: "/program" },
   },
@@ -422,7 +422,7 @@ function GuideContent({ guide, slug }: { guide: Guide; slug: string }) {
       ["Targetnya konsep, tugas, ujian, atau nilai?", "Persiapan ujian bisa memerlukan beberapa mapel; tugas harian mungkin hanya butuh satu. Target yang berbeda akan mengubah pilihan program dan pembagian sesi."],
       ["Lebih fokus sendiri atau nyaman bersama peserta lain?", "Privat memberi ruang mengikuti kecepatan satu anak atau teman yang diajak dalam pesanan. Kelas Bersama mengikuti materi dan jadwal yang sudah ditetapkan."],
       ["Tatap muka atau online yang realistis dijalankan?", "Pertimbangkan perjalanan tutor, tempat belajar, perangkat, koneksi internet, dan jam yang benar-benar dapat diikuti sepanjang paket."],
-    ].map(([question, explanation]) => <article key={question} className="border-t border-stone-300 py-6"><h3 className="text-xl font-extrabold text-[#14213D]">{question}</h3><p className="mt-3 leading-7 text-slate-600">{explanation}</p></article>)}</div></section><section className="mt-12 overflow-x-auto rounded-3xl border border-stone-200"><table className="w-full min-w-[600px] text-left text-sm"><caption className="bg-[#14213D] p-5 text-left text-xl font-extrabold text-white">Bandingkan pilihan belajar</caption><thead className="bg-stone-100"><tr><th className="p-4">Kebutuhan</th><th className="p-4">Paket Belajar</th><th className="p-4">Kelas Bersama</th></tr></thead><tbody className="divide-y divide-stone-200"><tr><td className="p-4 font-bold">Jadwal</td><td className="p-4">Dipilih saat menyusun paket</td><td className="p-4">Mengikuti jadwal kelas aktif</td></tr><tr><td className="p-4 font-bold">Materi</td><td className="p-4">Mapel dan Bab dipilih pemesan</td><td className="p-4">Mengikuti penawaran kelas</td></tr><tr><td className="p-4 font-bold">Peserta</td><td className="p-4">Privat atau peserta dalam satu pesanan</td><td className="p-4">Belajar bersama peserta lain</td></tr></tbody></table></section><aside className="mt-10 rounded-3xl border border-amber-200 bg-amber-50 p-6"><h2 className="text-xl font-extrabold text-[#14213D]">Contoh rekomendasi</h2><p className="mt-3 leading-7">{guide.example}</p><p className="mt-3 text-sm font-bold leading-6 text-amber-900">Batas: {guide.limit}</p></aside></>;
+    ].map(([question, explanation]) => <article key={question} className="border-t border-stone-300 py-6"><h3 className="text-xl font-extrabold text-[#14213D]">{question}</h3><p className="mt-3 leading-7 text-slate-600">{explanation}</p></article>)}</div></section><section className="mt-12 overflow-x-auto rounded-3xl border border-stone-200"><table className="w-full min-w-[600px] text-left text-sm"><caption className="bg-[#14213D] p-5 text-left text-xl font-extrabold text-white">Bandingkan pilihan belajar</caption><thead className="bg-stone-100"><tr><th className="p-4">Kebutuhan</th><th className="p-4">Paket Belajar</th><th className="p-4">Kelas Bersama</th></tr></thead><tbody className="divide-y divide-stone-200"><tr><td className="p-4 font-bold">Jadwal</td><td className="p-4">Dipilih saat menyusun paket</td><td className="p-4">Mengikuti jadwal kelas aktif</td></tr><tr><td className="p-4 font-bold">Materi</td><td className="p-4">Mapel dipilih, target dan materi dijelaskan pemesan</td><td className="p-4">Mengikuti penawaran kelas</td></tr><tr><td className="p-4 font-bold">Peserta</td><td className="p-4">Privat atau peserta dalam satu pesanan</td><td className="p-4">Belajar bersama peserta lain</td></tr></tbody></table></section><aside className="mt-10 rounded-3xl border border-amber-200 bg-amber-50 p-6"><h2 className="text-xl font-extrabold text-[#14213D]">Contoh rekomendasi</h2><p className="mt-3 leading-7">{guide.example}</p><p className="mt-3 text-sm font-bold leading-6 text-amber-900">Batas: {guide.limit}</p></aside></>;
   } else if (slug === "kelas-bersama") {
     body = <GroupClassGuide />;
   } else if (slug === "cara-pemesanan") {
@@ -605,7 +605,7 @@ function OfflineGuide() {
       <p className="mt-4 max-w-3xl leading-8 text-slate-600">Sebelum melihat total, keluarga perlu menyebut siapa yang belajar, apa yang akan dipelajari, dan kapan sesi itu realistis dijalankan. Jawaban ini menjadi acuan yang dilihat tutor, bukan hanya catatan administratif.</p>
       <div className="mt-7 grid gap-x-10 sm:grid-cols-2">
         <article className="border-t border-stone-300 py-6"><UsersRound className="text-orange-700" size={25} /><h3 className="mt-4 text-xl font-extrabold text-[#14213D]">Siapa yang belajar?</h3><p className="mt-3 leading-8">Pilih satu siswa untuk privat sendiri. Jika pilihan privat bersama teman dibuka di form, jumlah peserta dan identitas tiap peserta harus sesuai; ini berbeda dari Kelas Bersama yang punya jadwal dan kuota tersendiri.</p></article>
-        <article className="border-t border-stone-300 py-6"><BookOpenCheck className="text-orange-700" size={25} /><h3 className="mt-4 text-xl font-extrabold text-[#14213D]">Mapel, program, dan Bab apa?</h3><p className="mt-3 leading-8">Pilih mapel biasa atau program persiapan ujian, lalu tulis target belajar. Untuk mapel biasa, pilih Bab bila tersedia. Untuk program, mapel di dalamnya dipilih tanpa memaksakan Bab; beberapa mapel dapat ditangani tutor berbeda.</p></article>
+        <article className="border-t border-stone-300 py-6"><BookOpenCheck className="text-orange-700" size={25} /><h3 className="mt-4 text-xl font-extrabold text-[#14213D]">Mapel, program, dan target apa?</h3><p className="mt-3 leading-8">Pilih mapel biasa atau program persiapan ujian, lalu tulis target belajar. Tidak perlu memilih Bab dari katalog. Materi dan kesulitan dapat dijelaskan dengan bahasamu sendiri; untuk program, target khusus bersifat opsional. Beberapa mapel ditangani tutor berbeda.</p></article>
         <article className="border-t border-stone-300 py-6"><CalendarCheck className="text-teal-800" size={25} /><h3 className="mt-4 text-xl font-extrabold text-[#14213D]">Kapan dan berapa lama?</h3><p className="mt-3 leading-8">Pilih paket berisi jumlah sesi, durasi per sesi, hari, tanggal mulai, dan jam. Form menampilkan batas pemesanan serta rencana tanggal pertemuan. Pilih jam yang realistis untuk seluruh sesi; jadwal ini belum mengunci tutor.</p></article>
         <article className="border-t border-stone-300 py-6"><ReceiptText className="text-teal-800" size={25} /><h3 className="mt-4 text-xl font-extrabold text-[#14213D]">Kapan biaya diketahui?</h3><p className="mt-3 leading-8">Di ringkasan sebelum pesanan dikirim. Periksa paket, peserta, sesi, durasi, potongan yang berlaku, jadwal, dan <strong>total pembayaran</strong>. Nominal pada ringkasan itulah acuanmu sebelum membayar.</p></article>
       </div>
@@ -633,7 +633,7 @@ function OfflineGuide() {
 function BookingGuide() {
   const stages = [
     { number: 1, title: "Kebutuhan", Icon: UsersRound, question: "Paket dan peserta apa yang dipilih?", text: "Pilih jumlah sesi, siapa yang belajar, jenjang, mode online atau tatap muka, serta durasi tiap pertemuan. Jika memesan sebagai tamu, identitas pemesan dan email diisi di sini. Peserta tambahan hanya tersedia jika harga untuk jumlah itu sudah diatur." },
-    { number: 2, title: "Mapel", Icon: BookOpenCheck, question: "Belajar apa di setiap sesi?", text: "Pilih jalur mapel biasa atau program persiapan. Untuk beberapa mapel, bagi sesi sesuai kebutuhan; total sesi paket tidak bertambah ketika alokasi dipindah. Pilih Bab jika tersedia untuk mapel biasa, atau tulis target belajar. Program persiapan tidak memaksa pilihan Bab." },
+    { number: 2, title: "Mapel", Icon: BookOpenCheck, question: "Belajar apa di setiap sesi?", text: "Pilih jalur mapel biasa atau program persiapan. Untuk beberapa mapel, bagi sesi sesuai kebutuhan; total sesi paket tidak bertambah ketika alokasi dipindah. Tulis target atau materi yang ingin difokuskan per mapel. Nama Bab tidak wajib diketahui; untuk program persiapan, target khusus bersifat opsional." },
     { number: 3, title: "Jadwal", Icon: CalendarCheck, question: "Kapan dan di mana kelas berlangsung?", text: "Isi tanggal mulai, hari, dan jam untuk setiap mapel. Batas waktu pemesanan tampil di form. Untuk tatap muka, tambahkan alamat, titik lokasi, dan persetujuan penyimpanannya; mode online tidak meminta radius lokasi." },
     { number: 4, title: "Konfirmasi", Icon: ReceiptText, question: "Apa yang harus diperiksa sebelum dikirim?", text: "Ringkasan menunjukkan paket, peserta, pembagian mapel, durasi, seluruh tanggal, potongan yang berlaku, dan total. Gunakan Kembali & Ubah bila ada yang keliru. Menyimpan pesanan belum berarti pembayaran atau matching selesai." },
   ];
@@ -706,7 +706,7 @@ function OnlineGuide() {
         <article className="border-t border-stone-300 py-7">
           <BookOpenCheck className="text-teal-700" size={27} />
           <h3 className="mt-4 text-xl font-extrabold text-[#14213D]">Mapel untuk kebutuhan spesifik, program untuk target belajar.</h3>
-          <p className="mt-3 leading-8">Pilih <strong>mapel</strong> untuk kebutuhan seperti Matematika. Pilih <strong>program</strong> untuk tujuan seperti persiapan ujian, lalu tentukan mapel di dalamnya. Tulis target atau materi yang masih sulit; Bab dipilih bila tersedia dan relevan, tanpa memaksakannya pada program persiapan. Beberapa mapel dapat membutuhkan tutor yang berbeda.</p>
+          <p className="mt-3 leading-8">Pilih <strong>mapel</strong> untuk kebutuhan seperti Matematika. Pilih <strong>program</strong> untuk tujuan seperti persiapan ujian, lalu tentukan mapel di dalamnya. Tulis target atau materi yang masih sulit dengan bahasamu sendiri. Tidak perlu memilih Bab dari katalog; target khusus pada program persiapan bersifat opsional. Beberapa mapel dapat membutuhkan tutor yang berbeda.</p>
         </article>
         <article className="border-t border-stone-300 py-7">
           <CalendarCheck className="text-orange-700" size={27} />

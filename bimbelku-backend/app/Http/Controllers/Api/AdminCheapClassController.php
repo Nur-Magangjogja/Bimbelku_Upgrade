@@ -600,7 +600,7 @@ class AdminCheapClassController extends Controller
             'maximum_participants' => ['required', 'integer', 'min:2', 'max:12', 'gte:minimum_participants'],
             'registration_window_hours' => ['required', 'integer', 'min:1', 'max:168'],
             'registration_closes_before_minutes' => ['required', 'integer', 'min:30', 'max:10080'],
-            'payment_window_minutes' => ['required', 'integer', 'min:15', 'max:240'],
+            'payment_window_minutes' => ['required', 'integer', 'in:60'],
             'recurrence_enabled' => ['sometimes', 'boolean'],
         ]);
 

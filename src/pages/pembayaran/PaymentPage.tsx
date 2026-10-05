@@ -1,5 +1,5 @@
 import { notify } from "@/lib/notify";
-import { FormEvent, Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
@@ -25,12 +25,14 @@ import {
   X,
 } from "lucide-react";
 import StudentLayout from "@/components/StudentLayout";
+import PaymentDesignPreview from "@/components/PaymentDesignPreview";
 import OrderProgress from "@/components/OrderProgress";
 import { useConfirmDialog } from "@/components/ConfirmDialogProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import http, { getApiError, getApiErrorDetails } from "@/lib/http";
+import { getPaymentReturnOrderId } from "@/lib/paymentReturn";
 import { showFilePreview } from "@/lib/filePreview";
 import {
   containsLetter,
@@ -42,6 +44,13 @@ import {
 } from "@/lib/validation";
 
 const EmbeddedCheckout = lazy(() => import("@/components/EmbeddedCheckout"));
+
+type PaymentPreviewAction = "open" | "close" | "paid" | "pending" | "failed";
+declare global {
+  interface Window {
+    bimbelkuPaymentPreview?: (action: PaymentPreviewAction) => void;
+  }
+}
 
 interface EmbeddedSession {
   sessionId: string;
@@ -159,11 +168,19 @@ const describePaymentIssue = (error: unknown): PaymentIssue => {
 
 export default function PaymentPage() {
   const location = useLocation();
+  // Visual-only fixture: never available on a public host or in a normal build.
+  const designPreview = import.meta.env.VITE_PAYMENT_DESIGN_PREVIEW === "true"
+    && ["localhost", "127.0.0.1"].includes(window.location.hostname)
+    && location.pathname === "/payment-preview";
   const navigate = useNavigate();
   const confirm = useConfirmDialog();
   const [settings, setSettings] = useState<PaymentSettings | null>(null);
   const [order, setOrder] = useState<OrderData | null>(null);
   const [state, setState] = useState<State>("loading");
+  const [loadIssue, setLoadIssue] = useState<string | null>(null);
+  const loadGeneration = useRef(0);
+  const activeOrderId = useRef<number | null>(null);
+  const statusRequestId = useRef(0);
   const [reason, setReason] = useState("");
   const [senderName, setSenderName] = useState("");
   const [bankName, setBankName] = useState("");
@@ -204,14 +221,32 @@ export default function PaymentPage() {
       ? "Lihat Proses Kelas"
       : "Lihat Riwayat Transaksi";
 
+  const capturePaymentScope = () => {
+    const generation = loadGeneration.current;
+    const orderId = activeOrderId.current;
+    return () => generation === loadGeneration.current && activeOrderId.current === orderId;
+  };
+
   const checkStatus = useCallback(async (orderId: number, showNotification = true) => {
+    if (activeOrderId.current !== orderId) return false;
+    const generation = loadGeneration.current;
+    const requestId = ++statusRequestId.current;
+    const isCurrent = () => generation === loadGeneration.current && activeOrderId.current === orderId && statusRequestId.current === requestId;
+    if (!isCurrent()) return false;
+    if (designPreview) {
+      if (showNotification) notify.warning("Ini pratinjau desain. Tidak ada status pembayaran asli yang diperiksa.");
+      return true;
+    }
     try {
       try {
         await http.post(`/orders/${orderId}/payment-status-sync`);
       } catch {
         // Webhook tetap menjadi jalur utama; polling ini adalah fallback aman untuk localhost.
       }
+      if (!isCurrent()) return false;
       const response = await http.get(`/student/orders/${orderId}/status`);
+      if (!isCurrent()) return false;
+      if (Number(response.data?.id) !== orderId) throw new Error("Status yang diterima tidak cocok dengan tagihan ini.");
       const status = response.data.status as string;
       setReason(response.data.rejection_reason || "");
       setOrder((current) => current && current.orderId === orderId ? {
@@ -253,23 +288,64 @@ export default function PaymentPage() {
       } else if (status === "expired") {
         setState("expired");
         sessionStorage.removeItem("bimbelku_payment_order");
+      } else {
+        throw new Error("Status tagihan belum dapat dipastikan. Periksa kembali melalui Riwayat Transaksi.");
       }
       if (showNotification) notify.success("Status pembayaran diperbarui.");
+      return true;
     } catch (error) {
+      if (!isCurrent()) return false;
       if (showNotification) notify.error(getApiError(error));
+      return false;
     }
-  }, []);
+  }, [designPreview]);
 
   const initialize = useCallback(async () => {
+    const generation = ++loadGeneration.current;
+    const isCurrent = () => generation === loadGeneration.current;
+    activeOrderId.current = null;
+    if (designPreview) {
+      activeOrderId.current = 0;
+      setSettings({ provider: "xendit", xendit_configured: true, merchant_name: "BimbelKu", bank_name: "", account_number: "", account_name: "" });
+      setOrder({
+        orderId: 0, invoiceId: "PRATINJAU-DESAIN", tutorName: "Tutor dipilih setelah pembayaran",
+        subject: "Matematika", packageName: "Paket Belajar Privat", type: "Privat online",
+        price: 396000, subtotalAmount: 440000, discountAmount: 44000, orderKind: "package",
+        paymentDueAt: new Date(Date.now() + 45 * 60 * 1000).toISOString(),
+      });
+      setState("pending");
+      return;
+    }
     try {
-      const settingsPromise = http.get<PaymentSettings>("/payment-settings");
+      setState("loading");
+      setLoadIssue(null);
+      setOrder(null);
+      setCheckoutOpen(false);
+      setEmbeddedSession(null);
+      setLegacyCheckoutUrl(null);
+      setWalletQuote(null);
+      setUseWallet(false);
+      setSubmitting(false);
+      setSubmitIssue(null);
+      setReason("");
+      setProof(null);
+      setPaymentPin("");
+      const returnOrderId = getPaymentReturnOrderId(location.search);
       let resolved = location.state as OrderData | null;
-      if (!resolved?.orderId) {
+      if (returnOrderId !== null || !resolved?.orderId) {
         // Sumber kebenaran pertama adalah tagihan aktif dari backend.
         // sessionStorage hanya fallback untuk menampilkan status tagihan lama
         // (mis. bukti sedang diperiksa), sehingga order batal tidak dapat
         // menutupi tagihan baru yang masih aktif.
-        const response = await http.get("/active-order");
+        // An explicit return ID never falls back to a newer invoice or stored state.
+        const response = returnOrderId !== null
+          ? await http.get(`/student/orders/${returnOrderId}/status`)
+          : await http.get("/active-order");
+        if (!isCurrent()) return;
+        if (returnOrderId !== null) {
+          if (Number(response.data?.id) !== returnOrderId) throw new Error("Tagihan pada tautan pembayaran tidak sesuai.");
+          response.data = { ...response.data, order_id: response.data.id };
+        }
         if (response.data?.order_id) {
           resolved = {
             orderId: response.data.order_id,
@@ -306,36 +382,57 @@ export default function PaymentPage() {
           resolved = stored ? JSON.parse(stored) as OrderData : null;
         }
       }
-      setSettings((await settingsPromise).data);
+      const settingsResponse = await http.get<PaymentSettings>("/payment-settings");
+      if (!isCurrent()) return;
+      setSettings(settingsResponse.data);
       if (!resolved?.orderId) {
         setState("expired");
         return;
       }
       setOrder(resolved);
+      activeOrderId.current = resolved.orderId;
       sessionStorage.setItem("bimbelku_payment_order", JSON.stringify(resolved));
       try {
         const walletResponse = await http.get<WalletQuote>(`/student/orders/${resolved.orderId}/wallet-quote`);
+        if (!isCurrent()) return;
         setWalletQuote(walletResponse.data);
         setUseWallet(false);
       } catch {
+        if (!isCurrent()) return;
         setWalletQuote(null);
         setUseWallet(false);
       }
       try {
         const pinResponse = await http.get<{ configured: boolean }>("/student/payment-pin/status");
+        if (!isCurrent()) return;
         setPaymentPinConfigured(Boolean(pinResponse.data?.configured));
       } catch {
+        if (!isCurrent()) return;
         // Akun lama tetap dapat memakai transfer jika endpoint PIN belum tersedia.
         setPaymentPinConfigured(false);
       }
-      await checkStatus(resolved.orderId, false);
+      const loaded = await checkStatus(resolved.orderId, false);
+      if (!isCurrent()) return;
+      if (!loaded) {
+        throw new Error("Status tagihan belum dapat dimuat. Jangan membayar ulang; periksa pembayaran melalui Riwayat Transaksi.");
+      }
     } catch (error) {
-      notify.error(getApiError(error, "Tagihan gagal dimuat."));
+      if (!isCurrent()) return;
+      const message = error instanceof Error && !("response" in error) ? error.message : getApiError(error, "Tagihan gagal dimuat.");
+      setLoadIssue(message);
+      setOrder(null);
+      notify.error(message);
       setState("expired");
     }
-  }, [checkStatus, location.state]);
+  }, [checkStatus, designPreview, location.search, location.state]);
 
-  useEffect(() => { void initialize(); }, [initialize]);
+  useEffect(() => {
+    // Capture the ref objects (request counters, not DOM nodes) for this lifetime.
+    const requestScope = loadGeneration;
+    const currentOrder = activeOrderId;
+    void initialize();
+    return () => { ++requestScope.current; currentOrder.current = null; };
+  }, [initialize]);
 
   const fetchQris = useCallback(async () => {
     if (!settings?.qris_available) {
@@ -488,6 +585,7 @@ export default function PaymentPage() {
   const upload = async (event: FormEvent) => {
     event.preventDefault();
     if (!order) return;
+    const isCurrent = capturePaymentScope();
     if (useWallet) {
       if (!paymentPinConfigured) {
         notify.error("Buat PIN pembayaran terlebih dahulu.");
@@ -539,10 +637,12 @@ export default function PaymentPage() {
     setSubmitting(true);
     try {
       const response = await http.post(`/orders/${order.orderId}/pay`, payload);
+      if (!isCurrent()) return;
       notify.success(response.data.message);
       setReason("");
       await checkStatus(order.orderId, false);
     } catch (error) {
+      if (!isCurrent()) return;
       const issue = describePaymentIssue(error);
       setSubmitIssue(issue);
       if (issue.tone === "amber") notify.warning(issue.message);
@@ -551,13 +651,14 @@ export default function PaymentPage() {
         if (issue.code === "wallet_balance_changed") {
           try {
             const walletResponse = await http.get<WalletQuote>(`/student/orders/${order.orderId}/wallet-quote`);
+            if (!isCurrent()) return;
             setWalletQuote(walletResponse.data);
           } catch { /* status check below remains the fallback */ }
         }
         void checkStatus(order.orderId, false);
       }
     } finally {
-      setSubmitting(false);
+      if (isCurrent()) setSubmitting(false);
     }
   };
 
@@ -578,6 +679,7 @@ export default function PaymentPage() {
 
   const cancel = async () => {
     if (!order) return;
+    const isCurrent = capturePaymentScope();
     const approved = await confirm({
       title: isCheapClass ? "Batalkan keikutsertaan Kelas Bersama?" : "Batalkan tagihan?",
       description: isCheapClass
@@ -586,24 +688,33 @@ export default function PaymentPage() {
       confirmText: isCheapClass ? "Batalkan keikutsertaan" : "Ya, batalkan",
       tone: "danger",
     });
-    if (!approved) return;
+    if (!approved || !isCurrent()) return;
     try {
       const response = await http.post(`/orders/${order.orderId}/cancel`);
+      if (!isCurrent()) return;
       notify.success(response.data.message);
       sessionStorage.removeItem("bimbelku_payment_order");
       navigate(returnPath, { replace: true });
     } catch (error) {
+      if (!isCurrent()) return;
       notify.error(getApiError(error));
     }
   };
 
   const openXenditCheckout = async () => {
     if (!order || submitting) return;
+    const isCurrent = capturePaymentScope();
+    if (designPreview) {
+      setEmbeddedSession({ sessionId: "visual-only", componentsKey: "visual-only", amount: order.price });
+      setCheckoutOpen(true);
+      return;
+    }
     setSubmitting(true);
     setSubmitIssue(null);
     try {
       const mode = window.location.protocol === "https:" ? "components" : "payment_link";
       const response = await http.post(`/orders/${order.orderId}/xendit-session`, { mode });
+      if (!isCurrent()) return;
       const data = response.data?.data;
       const key = data?.components_sdk_key;
       if (data?.mode === "COMPONENTS" && typeof key === "string" && key.length > 0) {
@@ -618,6 +729,7 @@ export default function PaymentPage() {
         throw new Error("Pilihan pembayaran belum dapat dimuat untuk tagihan ini.");
       }
     } catch (error) {
+      if (!isCurrent()) return;
       const details = getApiErrorDetails(error, "Halaman pembayaran belum dapat dibuka.");
       setSubmitIssue({
         title: details.code === "xendit_not_configured" ? "Pembayaran otomatis belum tersedia" : "Pembayaran belum terbuka",
@@ -627,11 +739,35 @@ export default function PaymentPage() {
       });
       notify.error(details.message);
     } finally {
-      setSubmitting(false);
+      if (isCurrent()) setSubmitting(false);
     }
   };
 
   const paymentOrderId = order?.orderId;
+  useEffect(() => {
+    if (!designPreview) return;
+    window.bimbelkuPaymentPreview = (action) => {
+      if (action === "open") {
+        setState("pending");
+        setEmbeddedSession({ sessionId: "visual-only", componentsKey: "visual-only", amount: 396000 });
+        setCheckoutOpen(true);
+      } else if (action === "close") {
+        setCheckoutOpen(false);
+      } else if (action === "paid") {
+        setCheckoutOpen(false);
+        setState("paid");
+      } else if (action === "pending") {
+        setCheckoutOpen(false);
+        setSubmitIssue(null);
+        setState("pending");
+      } else if (action === "failed") {
+        setCheckoutOpen(false);
+        setState("pending");
+        setSubmitIssue({ title: "Pembayaran belum selesai", message: "Ini contoh tampilan saat pembayaran gagal. Tidak ada transaksi yang diproses.", tone: "amber" });
+      }
+    };
+    return () => { delete window.bimbelkuPaymentPreview; };
+  }, [designPreview]);
   useEffect(() => {
     if (!checkoutOpen || !paymentOrderId || state !== "pending") return;
     const timer = window.setInterval(() => {
@@ -653,8 +789,13 @@ export default function PaymentPage() {
     return <StudentLayout title="Pembayaran"><div className="grid min-h-[65vh] place-items-center"><div className="text-center"><Loader2 className="mx-auto h-10 w-10 animate-spin text-indigo-600" /><p className="mt-3 text-sm font-bold text-slate-500">Menyiapkan tagihan…</p></div></div></StudentLayout>;
   }
 
+  const previewNotice = designPreview && <div role="status" className="mx-auto mb-5 w-full max-w-6xl rounded-2xl border-2 border-amber-400 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-950">
+    PRATINJAU DESAIN LOKAL — bukan tagihan atau pembayaran asli. Perubahan tampilan di halaman ini tidak mengubah database. Pembayaran sungguhan tetap berada di halaman Pembayaran akun murid.
+  </div>;
+
   if (state === "paid") {
     return <StudentLayout title="Pembayaran">
+      {previewNotice}
       <div className="mx-auto grid min-h-[65vh] max-w-xl place-items-center pb-16">
         <div className="w-full overflow-hidden rounded-[1.75rem] border border-[#e5ebef] bg-white shadow-[0_24px_80px_-42px_rgba(13,35,54,.38)]">
           <div className="relative overflow-hidden bg-[#102b3f] px-6 pb-8 pt-9 text-center text-white sm:px-9">
@@ -678,6 +819,10 @@ export default function PaymentPage() {
         </div>
       </div>
     </StudentLayout>;
+  }
+
+  if (loadIssue) {
+    return <StudentLayout title="Pembayaran"><Result icon={AlertCircle} color="rose" title="Tagihan belum dapat ditampilkan" text={loadIssue} action="Buka Riwayat Transaksi" onClick={() => navigate("/student/history")} /></StudentLayout>;
   }
 
   if (state === "refund_pending" || state === "refunded") {
@@ -706,7 +851,14 @@ export default function PaymentPage() {
     const returnedFromGateway = new URLSearchParams(location.search).get("gateway");
     return (
       <StudentLayout title="Pembayaran">
+        {previewNotice}
         <div className="mx-auto w-full max-w-6xl space-y-5 pb-20">
+          {!designPreview && import.meta.env.VITE_PAYMENT_DESIGN_PREVIEW === "true" && ["localhost", "127.0.0.1"].includes(window.location.hostname) && <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+            <strong className="block">Ingin menilai tampilan pembayaran di dalam BimbelKu?</strong>
+            <span>Pada HTTP lokal, tagihan asli membuka checkout Xendit. </span>
+            <button type="button" onClick={() => navigate("/payment-preview")} className="font-black text-orange-800 underline underline-offset-2">Buka pratinjau desain tanpa transaksi</button>
+            <span>. Pratinjau tidak mengubah status pesanan ini.</span>
+          </div>}
           <button type="button" onClick={() => navigate(returnPath)} className="inline-flex min-h-10 items-center gap-2 text-sm font-bold text-slate-600 hover:text-slate-950"><ArrowLeft size={17} />Kembali ke pesanan</button>
           {returnedFromGateway === "cancelled" && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">Pembayaran belum selesai. Tagihan tetap aktif selama waktu pembayaran masih tersedia.</div>}
           {returnedFromGateway === "success" && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">Pembayaran telah dikirim. Status sedang dipastikan dari sistem pembayaran.</div>}
@@ -735,12 +887,12 @@ export default function PaymentPage() {
             </section>
             <section className="min-w-0 rounded-[1.75rem] border border-[#e3ebef] bg-white p-5 shadow-[0_20px_50px_-36px_rgba(13,35,54,.26)] sm:p-8">
               <div className="flex items-start gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#fff0e6] text-[#bb5526]"><WalletCards size={21} /></div><div><p className="text-xs font-black uppercase tracking-[.14em] text-[#ba5527]">Cara bayar</p><h2 className="mt-1 text-xl font-black text-[#102b3f]">Pilih metode pembayaran</h2></div></div>
-              <p className="mt-4 text-sm leading-6 text-slate-600">Metode yang tersedia untuk tagihanmu akan muncul di panel pembayaran. Data kartu atau akun pembayaran tidak disimpan oleh BimbelKu.</p>
+              <p className="mt-4 text-sm leading-6 text-slate-600">Buka pilihan metode, pilih salah satu, lalu konfirmasi. Instruksi berikutnya akan menyesuaikan QRIS, bank, atau e-wallet yang tersedia untuk tagihanmu. Data kartu atau akun pembayaran tidak disimpan oleh BimbelKu.</p>
               <div className="mt-6 space-y-3">
-                <div className="flex items-center gap-3 rounded-xl border border-slate-200 p-4"><div className="grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-[#102b3f]"><CreditCard size={20} /></div><div className="min-w-0"><p className="font-bold text-slate-900">Metode tersedia</p><p className="text-xs leading-5 text-slate-500">Lihat pilihan yang aktif untuk transaksi ini</p></div><ArrowRight size={18} className="ml-auto shrink-0 text-slate-400" /></div>
+                <button type="button" disabled={submitting || paymentExpired || !settings.xendit_configured} onClick={() => void openXenditCheckout()} className="flex min-h-16 w-full items-center gap-3 rounded-xl border border-slate-200 p-4 text-left transition hover:border-[#d45e27] hover:bg-[#fff8f3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d45e27] disabled:cursor-not-allowed disabled:opacity-50"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[#fff0e6] text-[#bb5526]"><CreditCard size={20} /></div><div className="min-w-0"><p className="font-bold text-slate-900">{submitting ? "Menyiapkan metode…" : "Pilih metode pembayaran"}</p><p className="text-xs leading-5 text-slate-500">{window.location.protocol === "https:" || designPreview ? "Buka pilihan yang aktif untuk tagihan ini" : "Buka pilihan pembayaran aman untuk tagihan ini"}</p></div>{submitting ? <Loader2 size={18} className="ml-auto shrink-0 animate-spin text-[#d45e27]" /> : <ArrowRight size={18} className="ml-auto shrink-0 text-[#d45e27]" />}</button>
                 <div className="flex items-start gap-3 rounded-xl bg-[#f4f7fa] p-4 text-sm leading-6 text-slate-600"><CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-600" />Status diperbarui otomatis setelah pembayaran berhasil. Kamu tidak perlu mengunggah bukti transfer.</div>
               </div>
-              {legacyCheckoutUrl ? <><a href={legacyCheckoutUrl} target="_blank" rel="noopener noreferrer" className="mt-6 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#d45e27] px-4 text-sm font-black text-white hover:bg-[#b84b1b]">Buka pilihan pembayaran<ArrowRight size={17} /></a><p className="mt-2 text-center text-xs leading-5 text-slate-500">Pembayaran dibuka di tab baru. Setelah selesai, kembali ke sini lalu tekan “Periksa status tagihan”.</p></> : <Button type="button" disabled={submitting || paymentExpired || !settings.xendit_configured} onClick={() => void openXenditCheckout()} className="mt-6 min-h-12 w-full rounded-xl bg-[#d45e27] text-sm font-black text-white hover:bg-[#b84b1b]">{submitting ? <Loader2 size={18} className="mr-2 animate-spin" /> : <ArrowRight size={18} className="mr-2" />}{submitting ? "Menyiapkan pilihan…" : "Lihat pilihan pembayaran"}</Button>}
+              {legacyCheckoutUrl && <><a href={legacyCheckoutUrl} target="_blank" rel="noopener noreferrer" className="mt-6 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#d45e27] px-4 text-sm font-black text-white hover:bg-[#b84b1b]">Lanjutkan ke halaman pembayaran<ArrowRight size={17} /></a><p className="mt-2 text-center text-xs leading-5 text-slate-500">Di HTTP lokal, pilihan metode dibuka di halaman pembayaran aman. Setelah selesai, kembali ke sini lalu periksa status tagihan. Tautan ini membuka sesi tagihan yang sama.</p></>}
               {!settings.xendit_configured && <p className="mt-3 text-center text-xs font-bold leading-5 text-rose-700">Pembayaran otomatis belum tersedia. Hubungi admin BimbelKu.</p>}
               <button type="button" onClick={() => void checkStatus(order.orderId)} className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 text-sm font-bold text-slate-600 hover:text-slate-900"><RefreshCw size={15} />Periksa status tagihan</button>
               <p className="mt-4 flex items-start gap-2 border-t border-slate-100 pt-4 text-xs leading-5 text-slate-500"><ShieldCheck size={16} className="mt-0.5 shrink-0 text-emerald-600" />Nominal dikunci oleh tagihan. Menutup panel pembayaran tidak membuat tagihan baru.</p>
@@ -751,17 +903,18 @@ export default function PaymentPage() {
           <div className="fixed inset-0 z-[100] flex items-end justify-center bg-[#0c1f30]/65 sm:items-center sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget) setCheckoutOpen(false); }}>
             <section role="dialog" aria-modal="true" aria-labelledby="payment-dialog-title" className="flex max-h-[94dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[1.75rem] bg-white shadow-2xl sm:max-h-[90dvh] sm:rounded-[1.75rem]">
               <div className="mx-auto mt-2 h-1.5 w-12 rounded-full bg-slate-200 sm:hidden" />
-              <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 pb-4 pt-5 sm:px-8 sm:pt-7"><div><p className="text-xs font-black uppercase tracking-[.15em] text-[#ba5527]">Langkah pembayaran</p><h2 id="payment-dialog-title" className="mt-1 text-xl font-black text-[#102b3f] sm:text-2xl">Pilih cara bayar</h2><p className="mt-1 text-sm text-slate-600">Selesaikan tagihan tanpa keluar dari BimbelKu.</p></div><button type="button" onClick={() => setCheckoutOpen(false)} aria-label="Tutup pilihan pembayaran" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200"><X size={19} /></button></div>
+              <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 pb-4 pt-5 sm:px-8 sm:pt-7"><div><p className="text-xs font-black uppercase tracking-[.15em] text-[#ba5527]">Langkah pembayaran</p><h2 id="payment-dialog-title" className="mt-1 text-xl font-black text-[#102b3f] sm:text-2xl">Pilih cara bayar</h2><p className="mt-1 text-sm text-slate-600">Pilih metode di bawah, lalu tekan tombol oranye untuk mengonfirmasi pilihanmu.</p></div><button type="button" onClick={() => setCheckoutOpen(false)} aria-label="Tutup pilihan pembayaran" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200"><X size={19} /></button></div>
               <div className="min-h-0 overflow-y-auto px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5 sm:px-8 sm:py-7">
                 <Suspense fallback={<div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-600"><Loader2 size={18} className="animate-spin" />Memuat pilihan…</div>}>
-                  <EmbeddedCheckout
+                  {designPreview ? <PaymentDesignPreview amount={embeddedSession.amount} onComplete={() => { setCheckoutOpen(false); setState("paid"); }} /> : <EmbeddedCheckout
                     key={embeddedSession.sessionId}
+                    sessionId={embeddedSession.sessionId}
                     componentsKey={embeddedSession.componentsKey}
                     amount={embeddedSession.amount}
                     resume={new URLSearchParams(location.search).get("checkout") === "resume"}
                     onComplete={() => void checkStatus(order.orderId, false)}
                     onFailure={(message) => { setSubmitIssue({ title: "Pembayaran belum selesai", message, tone: "amber" }); setCheckoutOpen(false); void checkStatus(order.orderId, false); }}
-                  />
+                  />}
                 </Suspense>
               </div>
             </section>

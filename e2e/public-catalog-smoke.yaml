@@ -1,0 +1,8 @@
+name: Public catalog smoke
+url: http://127.0.0.1:8080/program
+clearState: true
+---
+- launchApp
+- assertVisible: Temukan bidang belajar yang tepat.
+- assertVisible: Program belajar terpadu
+- takeScreenshot: program-catalog

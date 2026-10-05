@@ -1,0 +1,7 @@
+name: Protected student redirect
+url: http://127.0.0.1:8080/student/dashboard
+clearState: true
+---
+- launchApp
+- assertVisible: Masuk ke BimbelKu
+- takeScreenshot: student-login-redirect

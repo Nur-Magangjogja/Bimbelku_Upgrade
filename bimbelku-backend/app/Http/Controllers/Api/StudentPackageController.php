@@ -23,6 +23,7 @@ use App\Models\PromotionClaim;
 use App\Models\Refund;
 use App\Models\Setting;
 use App\Services\HourlyRateService;
+use App\Services\PackageEarningsAllocation;
 use App\Services\PackageCheckoutService;
 use App\Services\PrivateParticipantPricing;
 use App\Services\RefundSettlementService;
@@ -310,7 +311,10 @@ class StudentPackageController extends Controller
             'subjects.*.weekdays.min' => 'Pilih minimal satu hari belajar untuk setiap mapel.',
             'subjects.*.schedules.min' => 'Atur minimal satu jadwal belajar untuk setiap mapel.',
             'subjects.*.weekdays.max' => 'Setiap mata pelajaran hanya boleh memiliki maksimal 4 hari belajar.',
+            'subjects.*.learning_goal.string' => 'Target atau materi belajar harus berupa teks.',
+            'subjects.*.learning_goal.max' => 'Target atau materi belajar maksimal 1500 karakter per mapel.',
         ]);
+        $validated['subjects'] = \App\Support\LearningFocus::normalizeSubjects($validated['subjects'], ! empty($validated['learning_program_id']), $validated['education_level'], $validated['grade']);
         abort_if(
             filled($validated['promotion_code'] ?? null) && filled($validated['promotion_claim_id'] ?? null),
             422,
@@ -464,11 +468,6 @@ class StudentPackageController extends Controller
                 return $start;
             })->sortBy(fn (Carbon $date) => $date->timestamp)->values();
             abort_if($starts->unique(fn (Carbon $date) => $date->timestamp)->count() !== $starts->count(), 422, 'Jadwal dalam satu mapel tidak boleh sama.');
-            if (empty($item['curriculum_chapter_ids']) && empty($validated['learning_program_id'])) {
-                throw ValidationException::withMessages([
-                    'subjects' => "Pilih sedikitnya satu bab untuk {$subject->name}.",
-                ]);
-            }
             $chapterIds = collect($item['curriculum_chapter_ids'] ?? [])->map(fn ($id) => (int) $id)->unique()->values();
             $chapters = CurriculumChapter::query()
                 ->where('curriculum_subject_id', $subject->id)
@@ -531,6 +530,7 @@ class StudentPackageController extends Controller
             )
             : 0;
         $discount = $groupDiscount + $promotionDiscount;
+        $earningsAllocation = app(PackageEarningsAllocation::class);
 
         [$package, $order] = DB::transaction(function () use (
             $student,
@@ -547,7 +547,8 @@ class StudentPackageController extends Controller
             $participantCount,
             $purchaserParticipates,
             $participantNames,
-            $participantDetails
+            $participantDetails,
+            $earningsAllocation
         ) {
             \App\Models\User::query()->lockForUpdate()->findOrFail($student->id);
             if ($renewalOf) {
@@ -684,6 +685,20 @@ class StudentPackageController extends Controller
                         ]);
                     }
                 }
+            }
+
+            // The teacher offer must use the same after-discount amount as the
+            // invoice, apportioned to this subject rather than the whole program.
+            foreach ($earningsAllocation->forPackage($package->load('subjects.sessions')) as $subjectId => $amounts) {
+                $subject = $package->subjects->firstWhere('id', $subjectId);
+                $hours = max(1, $durationHours * (int) $subject->allocated_sessions);
+                BookingRequest::query()
+                    ->where('package_subject_id', $subjectId)
+                    ->where('status', 'awaiting_payment')
+                    ->update([
+                        'hourly_rate' => $amounts['gross_amount'] / $hours,
+                        'total_amount' => $amounts['gross_amount'],
+                    ]);
             }
 
             if ($promotion) {
@@ -850,6 +865,7 @@ class StudentPackageController extends Controller
                     'status' => 'matching',
                     'matched_teacher_id' => null,
                     'teacher_response_deadline' => null,
+                    'next_matching_at' => null,
                     'search_radius_km' => $nextScope,
                     'search_started_at' => now(),
                     'search_expires_at' => now()->addHours($matchingService->maximumSearchHours()),
@@ -995,6 +1011,7 @@ class StudentPackageController extends Controller
                     'status' => 'matching',
                     'matched_teacher_id' => null,
                     'teacher_response_deadline' => null,
+                    'next_matching_at' => null,
                     'search_radius_km' => $package->learning_mode === 'offline' ? 3 : null,
                     'search_started_at' => now(),
                     'search_expires_at' => now()->addHours($matchingService->maximumSearchHours()),

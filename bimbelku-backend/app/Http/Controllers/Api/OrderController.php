@@ -4,18 +4,21 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
+use App\Models\LearningPackage;
 use App\Models\Notification;
 use App\Models\Order;
-use App\Models\LearningPackage;
-use App\Models\PackageSession;
 use App\Models\PackageRenewal;
+use App\Models\PackageSession;
 use App\Models\PaymentSetting;
 use App\Models\User;
 use App\Services\CheapClassService;
-use App\Services\PackageCheckoutService;
 use App\Services\CustomerWalletService;
+use App\Services\GatewayPaymentSettlementService;
+use App\Services\PackageCheckoutService;
 use App\Services\PaymentReconciliationService;
+use App\Services\XenditPaymentService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -50,7 +53,7 @@ class OrderController extends Controller
             ->with(['booking', 'participant.bookingRequest', 'learningPackage.subjects.sessions.booking', 'cheapClassEnrollment.cheapClass'])
             ->findOrFail($id);
 
-        if (!in_array($order->status, ['pending', 'rejected', 'partially_paid'], true)) {
+        if (! in_array($order->status, ['pending', 'rejected', 'partially_paid'], true)) {
             return $this->paymentError('Tagihan ini sudah tidak dapat dibayar. Periksa status tagihan sebelum mencoba lagi.', 422, 'invoice_not_payable');
         }
 
@@ -64,18 +67,18 @@ class OrderController extends Controller
         // A top-up reuses the wallet hold authorized on the first payment.
         // Asking for the PIN again would block the top-up because the client
         // intentionally only submits proof for the remaining bank transfer.
-        if ($useWallet && !$isTopUp) {
+        if ($useWallet && ! $isTopUp) {
             $paymentPin = (string) ($walletInput['payment_pin'] ?? '');
-            if (!filled($request->user()->payment_pin_hash)) {
+            if (! filled($request->user()->payment_pin_hash)) {
                 return $this->paymentError('Buat PIN pembayaran terlebih dahulu untuk menggunakan Saldo BimbelKu.', 409, 'payment_pin_setup_required');
             }
-            if ($paymentPin === '' || !Hash::check($paymentPin, (string) $request->user()->payment_pin_hash)) {
+            if ($paymentPin === '' || ! Hash::check($paymentPin, (string) $request->user()->payment_pin_hash)) {
                 return $this->paymentError('PIN pembayaran tidak sesuai.', 422, 'payment_pin_invalid');
             }
         }
 
         $walletQuote = $wallets->quoteForOrder($order, (int) $request->user()->id);
-        if ($useWallet && !$walletQuote['supported']) {
+        if ($useWallet && ! $walletQuote['supported']) {
             return $this->paymentError(
                 'Saldo BimbelKu hanya tersedia untuk Paket Belajar dan Kelas Kelompok. Tagihan arsip lama tetap memakai transfer.',
                 422,
@@ -85,7 +88,7 @@ class OrderController extends Controller
         $walletAmount = $isTopUp
             ? round((float) $order->wallet_reserved_amount, 2)
             : ($useWallet ? round((float) $walletQuote['usable_amount'], 2) : 0.0);
-        if ($useWallet && !$isTopUp && $clientWalletExpected !== null && abs($walletAmount - $clientWalletExpected) > 0.009) {
+        if ($useWallet && ! $isTopUp && $clientWalletExpected !== null && abs($walletAmount - $clientWalletExpected) > 0.009) {
             return $this->paymentError(
                 'Saldo yang tersedia berubah. Muat ulang pembayaran sebelum melanjutkan.',
                 409,
@@ -100,7 +103,7 @@ class OrderController extends Controller
         if ($externalDue > 0) {
             $paymentSettings = PaymentSetting::query()->first();
             if (
-                !$paymentSettings
+                ! $paymentSettings
                 || blank($paymentSettings->bank_name)
                 || blank($paymentSettings->account_number)
                 || blank($paymentSettings->account_name)
@@ -148,8 +151,7 @@ class OrderController extends Controller
         Request $request,
         CheapClassService $cheapClassService,
         PaymentReconciliationService $reconciliation
-    )
-    {
+    ) {
         $cheapClassService->refreshLifecycle();
         $order = Order::query()
             ->where('user_id', $request->user()->id)
@@ -162,21 +164,22 @@ class OrderController extends Controller
             ->latest()
             ->first();
 
-        if (!$order) {
+        if (! $order) {
             return response()->json(null);
         }
         if ($order->learning_package_id) {
             if ($order->learningPackage?->payment_due_at?->isPast()) {
                 $this->expirePackageOrder($order, $reconciliation);
+
                 return response()->json(null);
             }
-            if (!in_array($order->learningPackage?->status, ['awaiting_payment', 'payment_rejected', 'partially_paid'], true)) {
+            if (! in_array($order->learningPackage?->status, ['awaiting_payment', 'payment_rejected', 'partially_paid'], true)) {
                 return response()->json(null);
             }
         } elseif ($order->cheap_class_enrollment_id) {
             $enrollment = $order->cheapClassEnrollment;
             $class = $enrollment?->cheapClass;
-            if (!$enrollment || !$class || !in_array($enrollment->status, ['seat_held', 'payment_rejected', 'partially_paid'], true) || !$enrollment->seat_expires_at?->isFuture()) {
+            if (! $enrollment || ! $class || ! in_array($enrollment->status, ['seat_held', 'payment_rejected', 'partially_paid'], true) || ! $enrollment->seat_expires_at?->isFuture()) {
                 return response()->json(null);
             }
         } else {
@@ -237,38 +240,63 @@ class OrderController extends Controller
         ]);
     }
 
-    public function cancelOrder(Request $request, int $id, CheapClassService $cheapClassService)
-    {
-        $order = Order::query()
-            ->where('user_id', $request->user()->id)
-            ->with(['booking.participants', 'participant.bookingRequest', 'learningPackage', 'cheapClassEnrollment'])
-            ->findOrFail($id);
+    public function cancelOrder(
+        Request $request,
+        int $id,
+        CheapClassService $cheapClassService,
+        XenditPaymentService $gateway,
+        GatewayPaymentSettlementService $settlement
+    ) {
+        $order = Order::query()->where('user_id', $request->user()->id)
+            ->with(['learningPackage', 'cheapClassEnrollment.cheapClass'])->findOrFail($id);
+        try {
+            $payment = Cache::lock('gateway-order-settlement:'.$order->id, 180)->block(15,
+                function () use ($order, $request, $cheapClassService, $gateway) {
+                    $current = $order->fresh(['learningPackage', 'cheapClassEnrollment.cheapClass']);
+                    if ($current->status === 'cancelled') {
+                        // Also close checkout links left behind by older code.
+                        return $gateway->cancelSession($current);
+                    }
+                    abort_unless(in_array($current->status, ['pending', 'rejected'], true), 422,
+                        'Tagihan tidak dapat dibatalkan setelah pembayaran diterima atau sedang diperiksa.');
+                    abort_unless($current->learning_package_id || $current->cheap_class_enrollment_id, 410,
+                        'Tagihan arsip pemesanan langsung sudah dipensiunkan.');
+                    if ($enrollment = $current->cheapClassEnrollment) {
+                        abort_unless(in_array($enrollment->status, ['seat_held', 'payment_rejected'], true)
+                            && $enrollment->cheapClass?->registration_deadline?->isFuture(), 422,
+                            'Keikutsertaan sudah tidak dapat dibatalkan.');
+                    }
+                    $paid = $gateway->cancelSession($current);
+                    if ($paid !== null) {
+                        return $paid;
+                    }
+                    if ($current->cheap_class_enrollment_id) {
+                        $cheapClassService->cancelEnrollment($current->cheapClassEnrollment, $request->user());
+                    } else {
+                        $this->cancelPackageOrder($current);
+                    }
 
-        if ($order->cheap_class_enrollment_id) {
-            $cheapClassService->cancelEnrollment($order->cheapClassEnrollment, $request->user());
-            return response()->json(['message' => 'Keikutsertaan Kelas Kelompok berhasil dibatalkan.']);
+                    return null;
+                });
+            if ($payment !== null) {
+                // Settlement uses the same lock: run it after releasing the
+                // cancellation lock so a payment race cannot deadlock.
+                $settlement->settle($order, $payment);
+
+                return response()->json(['message' => 'Pembayaran sudah diterima. Tagihan belum bayar tidak dapat dibatalkan; periksa status pesanan atau pengembalian dana di Riwayat Pembayaran.'], 422);
+            }
+
+            return response()->json(['message' => 'Pesanan dan checkout pembayaran berhasil dibatalkan.']);
+        } catch (\RuntimeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 502);
         }
-
-        if (!in_array($order->status, ['pending', 'rejected'], true)) {
-            return response()->json([
-                'message' => 'Tagihan tidak dapat dibatalkan saat pembayaran sedang diperiksa.',
-            ], 422);
-        }
-
-        if ($order->learning_package_id) {
-            $this->cancelPackageOrder($order);
-            return response()->json(['message' => 'Tagihan paket berhasil dibatalkan.']);
-        }
-
-        return response()->json(['message' => 'Tagihan arsip pemesanan langsung sudah dipensiunkan.'], 410);
     }
 
     public function index(
         Request $request,
         CheapClassService $cheapClassService,
         PaymentReconciliationService $reconciliation
-    )
-    {
+    ) {
         $cheapClassService->refreshLifecycle();
         Order::query()
             ->where('user_id', $request->user()->id)
@@ -344,10 +372,10 @@ class OrderController extends Controller
                 'wallet_reserved_amount' => (float) $order->wallet_reserved_amount,
                 'wallet_applied_amount' => (float) $order->wallet_applied_amount,
                 'external_payment_amount' => round(max(0, (float) $order->amount - (float) ($order->status === 'submitted' ? $order->wallet_reserved_amount : $order->wallet_applied_amount)), 2),
-            'payment_provider' => $order->payment_provider,
-            'gateway_status' => $order->gateway_status,
-            'gateway_session_id' => $order->gateway_session_id,
-            'gateway_expires_at' => $order->gateway_expires_at,
+                'payment_provider' => $order->payment_provider,
+                'gateway_status' => $order->gateway_status,
+                'gateway_session_id' => $order->gateway_session_id,
+                'gateway_expires_at' => $order->gateway_expires_at,
                 'enrollment_status' => $cheapEnrollment?->status,
                 'cheap_class_status' => $cheapClass?->status,
                 'cheap_class_cancellation_reason' => $cheapClass?->cancellation_reason,
@@ -383,6 +411,7 @@ class OrderController extends Controller
                 // tertahan pada submitted order tanpa bukti transfer.
                 $autoVerifyResult = DB::transaction(function () use ($submit, $cheapClassService, $order) {
                     $submit();
+
                     return $cheapClassService->verifyPayment($order->fresh(), 'paid', '', null);
                 }, 3);
             } else {
@@ -403,6 +432,7 @@ class OrderController extends Controller
                 }
                 if ($exception->getStatusCode() === 422 && $message === 'Batas pembayaran sudah berakhir.') {
                     $cheapClassService->refreshLifecycle(false);
+
                     return $this->paymentError(
                         'Batas pembayaran sudah berakhir. Tagihan tidak lagi menerima bukti transfer.',
                         422,
@@ -456,11 +486,12 @@ class OrderController extends Controller
         PaymentReconciliationService $reconciliation
     ) {
         $package = $order->learningPackage;
-        if (!$package || !in_array($package->status, ['awaiting_payment', 'payment_rejected', 'partially_paid'], true)) {
+        if (! $package || ! in_array($package->status, ['awaiting_payment', 'payment_rejected', 'partially_paid'], true)) {
             return $this->paymentError('Paket tidak lagi menunggu pembayaran. Periksa status paket sebelum mencoba lagi.', 422, 'package_not_payable');
         }
         if ($package->payment_due_at?->isPast()) {
             $this->expirePackageOrder($order, $reconciliation);
+
             return $this->paymentError('Batas pembayaran paket sudah berakhir. Buat tagihan baru sebelum membayar.', 422, 'payment_expired');
         }
         if ($conflict = $this->findPackagePaymentConflict($package)) {
@@ -499,7 +530,7 @@ class OrderController extends Controller
                     )
                     : 0.0);
                 $externalDue = round(max(0, (float) $lockedOrder->amount - $walletReserved - (float) $lockedOrder->external_received_amount), 2);
-                abort_if($externalDue > 0 && !$path, 422, 'Bukti pembayaran eksternal wajib diunggah untuk sisa tagihan.');
+                abort_if($externalDue > 0 && ! $path, 422, 'Bukti pembayaran eksternal wajib diunggah untuk sisa tagihan.');
                 abort_if($externalDue <= 0 && $path, 422, 'Tagihan ini sudah tertutup penuh oleh Saldo BimbelKu.');
 
                 $previousProof = $lockedOrder->payment_proof;
@@ -557,6 +588,7 @@ class OrderController extends Controller
 
         if ((float) $validated['external_due'] <= 0) {
             $result = $activationResult ?? 'matching';
+
             return response()->json([
                 'message' => $result === 'refund_pending'
                     ? 'Saldo diterapkan, tetapi sesi pertama sudah dimulai. Refund penuh masuk antrean admin.'
@@ -610,7 +642,7 @@ class OrderController extends Controller
 
     private function findBookingPaymentConflict(Booking $booking): ?array
     {
-        if (!$booking->start_at || !$booking->end_at) {
+        if (! $booking->start_at || ! $booking->end_at) {
             return null;
         }
 
@@ -625,7 +657,7 @@ class OrderController extends Controller
             ->where('end_at', '>', $booking->start_at)
             ->exists();
 
-        if (!$hasConflict) {
+        if (! $hasConflict) {
             return null;
         }
 
@@ -642,7 +674,7 @@ class OrderController extends Controller
 
         foreach ($package->subjects as $subject) {
             foreach ($subject->sessions as $session) {
-                if (!$session->scheduled_start_at || !$session->scheduled_end_at) {
+                if (! $session->scheduled_start_at || ! $session->scheduled_end_at) {
                     continue;
                 }
 
@@ -702,17 +734,18 @@ class OrderController extends Controller
     private function expirePackageOrder(
         Order $order,
         PaymentReconciliationService $reconciliation
-    ): void
-    {
+    ): void {
         DB::transaction(function () use ($order, $reconciliation) {
             $lockedOrder = Order::query()->lockForUpdate()->find($order->id);
-            if (!$lockedOrder || !in_array($lockedOrder->status, ['pending', 'rejected', 'partially_paid'], true)) {
+            if (! $lockedOrder || ! in_array($lockedOrder->status, ['pending', 'rejected', 'partially_paid'], true)) {
                 return;
             }
             $package = $lockedOrder->learningPackage()->lockForUpdate()->first();
             $reconciliation->returnExpiredPartialPayment($lockedOrder);
             $lockedOrder->update(['status' => 'expired']);
-            if (!$package) return;
+            if (! $package) {
+                return;
+            }
 
             $package->update(['status' => 'payment_expired', 'payment_due_at' => null]);
             $package->subjects()->with(['sessions.booking.bookingRequest', 'bookingRequest.offers'])->get()->each(
@@ -746,7 +779,7 @@ class OrderController extends Controller
             Notification::create([
                 'user_id' => $lockedOrder->user_id,
                 'title' => 'Batas pembayaran paket berakhir',
-                'message' => 'Tagihan dibatalkan karena pembayaran tidak diselesaikan dalam 48 jam.',
+                'message' => 'Tagihan dibatalkan karena batas waktu pembayaran sudah berakhir.',
                 'type' => 'warning',
                 'target_url' => '/student/history',
             ]);

@@ -6,13 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\PaymentGatewayEvent;
 use App\Services\CheapClassService;
+use App\Services\GatewayPaymentSettlementService;
 use App\Services\PackageCheckoutService;
 use App\Services\XenditPaymentService;
 use App\Services\XenditWebhookService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
@@ -29,6 +28,7 @@ class XenditPaymentController extends Controller
 
         try {
             $mode = ($validated['mode'] ?? 'payment_link') === 'components' ? 'COMPONENTS' : 'PAYMENT_LINK';
+
             return response()->json(['data' => $xendit->createSession($order, $request->user(), $mode, $request->header('Origin'))])
                 ->header('Cache-Control', 'no-store');
         } catch (RuntimeException $exception) {
@@ -61,12 +61,9 @@ class XenditPaymentController extends Controller
             $successful = in_array($status, ['COMPLETED', 'SUCCEEDED', 'PAID', 'CAPTURED'], true);
 
             if ($successful) {
-                $this->settleSuccessfulPayment($order, $data, $xendit, $packages, $cheapClasses);
+                app(GatewayPaymentSettlementService::class)->settle($order, $data);
             } else {
-                $order->forceFill([
-                    'gateway_status' => $status ?: $order->gateway_status,
-                    'gateway_expires_at' => Arr::get($data, 'expires_at') ?: $order->gateway_expires_at,
-                ])->save();
+                $xendit->recordSessionStatus($order, $status, $data);
             }
 
             $fresh = $order->fresh();
@@ -102,6 +99,7 @@ class XenditPaymentController extends Controller
 
         if (str_starts_with($eventType, 'refund.') || str_starts_with($eventType, 'v3_payout.')) {
             $moneyWebhooks->handle($eventType, $eventId, $payload, $data);
+
             return response()->json(['received' => true]);
         }
 
@@ -113,11 +111,34 @@ class XenditPaymentController extends Controller
         $orderId = Arr::get($data, 'metadata.order_id')
             ?? Arr::get($data, 'payment_session.metadata.order_id');
 
-        $order = Order::query()
-            ->when($sessionId, fn ($query) => $query->where('gateway_session_id', $sessionId))
-            ->when(! $sessionId && $reference, fn ($query) => $query->where('gateway_reference_id', $reference))
-            ->when(! $sessionId && ! $reference && $orderId, fn ($query) => $query->whereKey($orderId))
-            ->first();
+        $validSession = $sessionId === null || (is_string($sessionId) && trim($sessionId) !== '' && strlen($sessionId) <= 128);
+        $validReference = $reference === null || (is_string($reference) && trim($reference) !== '' && strlen($reference) <= 128);
+        $validOrderId = $orderId === null || ((is_string($orderId) || is_int($orderId)) && ctype_digit((string) $orderId) && (int) $orderId > 0);
+        $identityError = null;
+        $order = null;
+        if (! $validSession || ! $validReference || ! $validOrderId) {
+            $identityError = 'Identitas transaksi webhook tidak valid.';
+        } elseif (! $sessionId && ! $reference) {
+            // A metadata order ID alone is not a payment-session identity.
+            // Never run an unfiltered first() when identifiers are missing.
+            $identityError = 'Webhook tidak memiliki ID sesi atau referensi checkout.';
+        } else {
+            $order = Order::query()
+                ->when($reference, fn ($query) => $query->where('gateway_reference_id', $reference))
+                ->when($sessionId, fn ($query) => $query->where(function ($sessions) use ($sessionId, $reference) {
+                    $sessions->where('gateway_session_id', $sessionId);
+                    if ($reference) {
+                        // An authenticated callback can recover a session whose
+                        // create response was lost, but only by its saved ref.
+                        $sessions->orWhere(fn ($unknown) => $unknown->whereNull('gateway_session_id')->where('gateway_creation_uncertain', true));
+                    }
+                }))
+                ->when($orderId, fn ($query) => $query->whereKey($orderId))
+                ->first();
+            if (! $order) {
+                $identityError = 'Identitas webhook tidak cocok dengan checkout tagihan.';
+            }
+        }
 
         $event = PaymentGatewayEvent::firstOrCreate(
             ['event_id' => 'xendit:'.$eventId],
@@ -133,18 +154,21 @@ class XenditPaymentController extends Controller
             return response()->json(['received' => true]);
         }
         if (! $order) {
-            $event->update(['status' => 'ignored', 'error' => 'Order tidak ditemukan', 'processed_at' => now()]);
+            $event->update(['status' => 'ignored', 'error' => $identityError ?? 'Order tidak ditemukan', 'processed_at' => now()]);
+
             return response()->json(['received' => true], 202);
         }
 
         $status = strtoupper((string) (Arr::get($data, 'status') ?? Arr::get($data, 'payment_session.status') ?? ''));
-        $successful = Str::contains($eventType, ['payment_session.completed', 'payment.succeeded', 'payment.capture'])
+        $successful = in_array($eventType, ['payment_session.completed', 'payment.succeeded', 'payment.capture', 'payment.capture.succeeded'], true)
             || in_array($status, ['COMPLETED', 'SUCCEEDED', 'PAID', 'CAPTURED'], true);
 
         if (! $successful) {
             $gatewayStatus = in_array($status, ['EXPIRED', 'CANCELED', 'CANCELLED', 'FAILED'], true) ? $status : ($status ?: 'EVENT_RECEIVED');
-            $order->forceFill(['gateway_status' => $gatewayStatus])->save();
-            $event->update(['status' => 'processed', 'processed_at' => now()]);
+            $updated = $xendit->recordSessionStatus($order, $gatewayStatus, $data);
+            $event->update(['status' => $updated ? 'processed' : 'ignored', 'processed_at' => now(),
+                'error' => $updated ? null : 'Notifikasi lama/status nonfinal tidak boleh menimpa status checkout atau penerimaan dana.']);
+
             return response()->json(['received' => true]);
         }
 
@@ -153,17 +177,34 @@ class XenditPaymentController extends Controller
             // Some completion notifications omit the amount. Verify the session
             // server-to-server before accepting it instead of trusting a blank value.
             $verified = $xendit->fetchSession($order);
+            if (! in_array(strtoupper((string) ($verified['status'] ?? '')), ['COMPLETED', 'SUCCEEDED', 'PAID', 'CAPTURED'], true)) {
+                $event->update(['status' => 'failed', 'error' => 'Gateway belum mengonfirmasi pembayaran berhasil.']);
+
+                return response()->json(['received' => true], 202);
+            }
             $data = array_replace_recursive($data, $verified);
             $paidAmount = $this->paidAmount($data);
         }
-        $expectedAmount = $xendit->externalDue($order);
+        $expectedAmount = $order->gateway_expected_amount ?? $xendit->externalDue($order);
+        if (in_array($order->status, ['expired', 'cancelled'], true) && $order->gateway_expected_amount === null && $paidAmount <= (float) $order->amount) {
+            $expectedAmount = $paidAmount;
+        }
+        // A repeated success must not fail validation merely because the first
+        // delivery already consumed the outstanding balance.
+        if (in_array($order->status, ['paid', 'refund_pending', 'refunded'], true) && $order->gateway_status === 'COMPLETED') {
+            app(GatewayPaymentSettlementService::class)->settle($order, $data);
+            $event->update(['status' => 'processed', 'processed_at' => now()]);
+
+            return response()->json(['received' => true]);
+        }
         if ($paidAmount <= 0 || ($order->status !== 'submitted' && abs($paidAmount - $expectedAmount) > 0.009)) {
             $event->update(['status' => 'failed', 'error' => 'Nominal webhook tidak sama dengan tagihan.']);
+
             return response()->json(['received' => true], 202);
         }
 
         try {
-            $this->settleSuccessfulPayment($order, $data, $xendit, $packages, $cheapClasses);
+            app(GatewayPaymentSettlementService::class)->settle($order, $data);
             $event->update(['order_id' => $order->id, 'status' => 'processed', 'error' => null, 'processed_at' => now()]);
         } catch (Throwable $exception) {
             $event->update(['status' => 'failed', 'error' => Str::limit($exception->getMessage(), 1500)]);
@@ -171,71 +212,6 @@ class XenditPaymentController extends Controller
         }
 
         return response()->json(['received' => true]);
-    }
-
-    private function settleSuccessfulPayment(
-        Order $order,
-        array $data,
-        XenditPaymentService $xendit,
-        PackageCheckoutService $packages,
-        CheapClassService $cheapClasses
-    ): void {
-        Cache::lock('gateway-order-settlement:'.$order->id, 60)->block(15, function () use ($order, $data, $xendit, $packages, $cheapClasses) {
-            $current = $order->fresh();
-            if (in_array($current->status, ['paid', 'refund_pending', 'refunded'], true)) {
-                return;
-            }
-
-            $paidAmount = $this->paidAmount($data);
-            if ($current->status !== 'submitted') {
-                $expectedAmount = $xendit->externalDue($current);
-                if ($paidAmount > 0 && abs($paidAmount - $expectedAmount) > 0.009) {
-                    throw new RuntimeException('Nominal pembayaran tidak sama dengan tagihan.');
-                }
-
-                DB::transaction(function () use ($current, $data, $paidAmount) {
-                    $locked = Order::query()->lockForUpdate()->findOrFail($current->id);
-                    if (in_array($locked->status, ['paid', 'refund_pending', 'refunded'], true)) {
-                        return;
-                    }
-                    if ($locked->status === 'submitted' && $locked->gateway_status === 'COMPLETED') {
-                        return;
-                    }
-
-                    abort_unless(in_array($locked->status, ['pending', 'rejected', 'partially_paid'], true), 409, 'Tagihan tidak lagi dapat diselesaikan.');
-                    $locked->forceFill([
-                        'payment_provider' => 'xendit',
-                        'gateway_payment_id' => Arr::get($data, 'payment_id') ?? Arr::get($data, 'payment.id'),
-                        'gateway_payment_request_id' => Arr::get($data, 'payment_request_id') ?? Arr::get($data, 'payment_request.id'),
-                        'gateway_status' => 'COMPLETED',
-                        'gateway_paid_at' => now(),
-                        'status' => 'submitted',
-                        'external_received_amount' => round((float) $locked->external_received_amount + ($paidAmount > 0 ? $paidAmount : max(0, (float) $locked->amount - (float) $locked->wallet_reserved_amount)), 2),
-                        'payment_outstanding_amount' => 0,
-                        'payment_surplus_amount' => 0,
-                        'payment_reconciliation_status' => 'exact',
-                        'payment_submitted_at' => now(),
-                        'payment_rejection_reason' => null,
-                    ])->save();
-                }, 3);
-            }
-
-            $fresh = $order->fresh();
-            if ($fresh->status !== 'submitted') {
-                return;
-            }
-            if ($fresh->learning_package_id) {
-                $packages->activatePaidPackage($fresh, null);
-            } elseif ($fresh->cheap_class_enrollment_id) {
-                $result = $cheapClasses->verifyPayment($fresh, 'paid', '', null);
-                if (! empty($result['class_id'])) {
-                    $class = \App\Models\CheapClass::find($result['class_id']);
-                    if ($class) {
-                        $cheapClasses->finalizeIfReady($class);
-                    }
-                }
-            }
-        });
     }
 
     private function paidAmount(array $data): float

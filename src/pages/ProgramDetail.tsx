@@ -57,8 +57,11 @@ export default function ProgramDetail() {
     setFailed(false);
     // Package choices are supplemental. Do not hold the subject hero behind a
     // second API request when the catalog response is already available.
-    void getCached<{ subject_options?: CatalogSubject[] }>("/learning-catalog", { params: { compact: 1 }, maxAgeMs: 5 * 60_000, force }).then((catalogResponse) => {
-      setSubjects((catalogResponse.data.subject_options || []).filter((item) => Number.isInteger(item.id) && item.id > 0 && item.name?.trim()));
+    const catalog = !force && window.__bimbelkuProgramCatalog
+      ? window.__bimbelkuProgramCatalog.then((subjects) => subjects ?? getCached<{ subject_options?: CatalogSubject[] }>("/learning-catalog", { params: { compact: 1 }, maxAgeMs: 5 * 60_000 }).then((response) => response.data.subject_options || []))
+      : getCached<{ subject_options?: CatalogSubject[] }>("/learning-catalog", { params: { compact: 1 }, maxAgeMs: 5 * 60_000, force }).then((response) => response.data.subject_options || []);
+    void catalog.then((items) => {
+      setSubjects(items.filter((item) => Number.isInteger(item.id) && item.id > 0 && item.name?.trim()));
     }).catch(() => setFailed(true)).finally(() => setLoading(false));
     void getCached<PackagePlan[]>("/package-plans", { maxAgeMs: 5 * 60_000, force })
       .then((response) => setPlans(Array.isArray(response.data) ? response.data : []))
@@ -169,7 +172,7 @@ export default function ProgramDetail() {
     <div className="public-site min-h-screen bg-white">
       <SeoHead
         title={`Les ${program.name} ${selectedLevel} di Yogyakarta | ${settings.brand_name}`}
-        description={`${pageContent?.hero_intro || programSummary(program)} Pilih Bab, jadwal, online atau tatap muka sebelum memesan.`.slice(0, 158)}
+        description={`${pageContent?.hero_intro || programSummary(program)} Jelaskan target belajar, pilih jadwal, online atau tatap muka sebelum memesan.`.slice(0, 158)}
         canonicalPath={programPath(program, selectedLevel)}
         image={heroImage}
         schemas={seoSchemas}
@@ -194,10 +197,13 @@ export default function ProgramDetail() {
                 </div>
               </div>
               <aside className="relative min-h-[430px] overflow-hidden rounded-3xl bg-[#14213D] shadow-2xl ring-1 ring-white/20">
-                <img src={heroImage} alt={`Suasana belajar ${program.name}`} loading="eager" decoding="async" fetchPriority="high" className="absolute inset-0 h-full w-full object-cover object-center" />
+                <picture className="absolute inset-0 block h-full w-full">
+                  {heroImage === "/hero-bimbelku-character-v2.webp" && <source media="(max-width: 639px)" srcSet="/hero-bimbelku-character-mobile-optimized.webp" type="image/webp" />}
+                  <img src={heroImage} alt={`Suasana belajar ${program.name}`} loading="eager" decoding="async" fetchPriority="high" className="h-full w-full object-cover object-center" />
+                </picture>
                 <div className="absolute inset-0 bg-gradient-to-t from-[#071A2D] via-[#071A2D]/20 to-transparent" aria-hidden="true" />
                 <div className="absolute left-5 top-5 max-w-[72%] rounded-3xl bg-white/95 p-5 text-[#14213D] shadow-xl sm:left-7 sm:top-7 sm:p-6 lg:backdrop-blur">
-                  <p className="text-xs font-extrabold uppercase tracking-wider text-teal-700">Les privat · {selectedLevel}</p><p className="mt-2 text-2xl font-extrabold leading-tight">{program.name}</p><p className="mt-3 text-xs font-semibold leading-5 text-slate-600">Pilih Bab, target, jadwal, dan metode belajar sebelum memesan.</p>
+                  <p className="text-xs font-extrabold uppercase tracking-wider text-teal-700">Les privat · {selectedLevel}</p><p className="mt-2 text-2xl font-extrabold leading-tight">{program.name}</p><p className="mt-3 text-xs font-semibold leading-5 text-slate-600">Jelaskan materi atau target, pilih jadwal dan metode belajar sebelum memesan.</p>
                 </div>
                 <div className="absolute inset-x-5 bottom-5 grid gap-2 sm:inset-x-7 sm:grid-cols-2"><p className="flex gap-2 rounded-2xl bg-[#14213D]/90 p-3 text-xs font-bold leading-5 text-white lg:backdrop-blur"><CreditCard size={16} className="shrink-0 text-orange-300" />Harga terlihat sebelum bayar</p><p className="flex gap-2 rounded-2xl bg-[#14213D]/90 p-3 text-xs font-bold leading-5 text-white lg:backdrop-blur"><Radar size={16} className="shrink-0 text-teal-300" />Matching setelah verifikasi</p></div>
               </aside>
@@ -253,7 +259,7 @@ export default function ProgramDetail() {
           <div className="mx-auto max-w-[1100px] px-5 sm:px-8">
             <div className="text-center"><p className="text-xs font-extrabold uppercase tracking-wider text-teal-700">Alur transparan</p><h2 className="mt-3 text-3xl font-extrabold text-[#14213D]">Dari pilihan program sampai mulai belajar.</h2></div>
             <ol className="mt-9 grid gap-4 md:grid-cols-5">
-              {[["01", "Isi peserta", "Tulis identitas dan email, tanpa harus login lebih dulu."], ["02", "Pilih program", "Tentukan Bab, paket, durasi, serta jumlah peserta."], ["03", "Atur jadwal", "Pilih mode, hari, waktu, dan lokasi belajar."], ["04", "Simpan pesanan", "Periksa harga dan ketentuan; pesanan tersimpan dengan kode."], ["05", "Masuk & bayar", "Gunakan email yang sama, lanjutkan pembayaran, lalu matching dimulai setelah verifikasi."]].map(([number, title, text]) => <li key={number} className="rounded-3xl border border-stone-200 p-5"><span className="text-sm font-extrabold text-orange-700">{number}</span><h3 className="mt-3 font-extrabold text-[#14213D]">{title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{text}</p></li>)}
+              {[["01", "Isi peserta", "Tulis identitas dan email, tanpa harus login lebih dulu."], ["02", "Pilih program", "Jelaskan target atau materi, tentukan paket, durasi, serta jumlah peserta."], ["03", "Atur jadwal", "Pilih mode, hari, waktu, dan lokasi belajar."], ["04", "Simpan pesanan", "Periksa harga dan ketentuan; pesanan tersimpan dengan kode."], ["05", "Masuk & bayar", "Gunakan email yang sama, lanjutkan pembayaran, lalu matching dimulai setelah verifikasi."]].map(([number, title, text]) => <li key={number} className="rounded-3xl border border-stone-200 p-5"><span className="text-sm font-extrabold text-orange-700">{number}</span><h3 className="mt-3 font-extrabold text-[#14213D]">{title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{text}</p></li>)}
             </ol>
             <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row"><StudentPackageLink to={builderUrl} className="inline-flex min-h-12 items-center gap-2 rounded-2xl bg-[#C2410C] px-6 text-sm font-extrabold text-white">Susun Paket {program.name}<ArrowRight size={17} /></StudentPackageLink><Link to="/#tutor" className="inline-flex min-h-12 items-center px-5 text-sm font-extrabold text-[#14213D]">Lihat galeri tutor</Link></div>
           </div>

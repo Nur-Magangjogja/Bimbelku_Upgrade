@@ -54,7 +54,7 @@ class GoogleAuthController extends Controller
 
             $user = User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
             if ($user && !in_array($user->role, ['student', 'teacher'], true)) {
-                return $this->frontendError('Akun administrator masuk melalui halaman login admin.', $frontendOrigin);
+                return $this->frontendError('Gunakan email dan kata sandi untuk masuk dengan akun ini.', $frontendOrigin);
             }
             if ($user && in_array($user->status, ['banned', 'rejected'], true)) {
                 return $this->frontendError('Akun ini sedang tidak dapat digunakan. Hubungi admin BimbelKu.', $frontendOrigin);

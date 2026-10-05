@@ -165,8 +165,7 @@ export default function CheapClassManagement() {
     && Number(form.minimum_participants) >= 2
     && Number(form.maximum_participants) >= Number(form.minimum_participants)
     && Number(form.maximum_participants) <= 12
-    && Number(form.payment_window_minutes) >= 15
-    && Number(form.payment_window_minutes) <= 240
+    && Number(form.payment_window_minutes) === 60
     && Number(form.registration_closes_before_minutes) >= 30
   );
   const upcomingSessionCount = useMemo(() => classes.reduce((total, item) => total + (item.sessions?.length || item.session_count || 0), 0), [classes]);
@@ -348,7 +347,7 @@ export default function CheapClassManagement() {
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <Field label="Batas kuota (2–12 peserta)"><div className="flex items-center gap-2"><Input required type="number" min="2" max="12" value={form.minimum_participants} onChange={(event) => setForm((current) => ({ ...current, minimum_participants: event.target.value }))} /><span className="font-bold text-slate-400">s.d.</span><Input required type="number" min="2" max="12" value={form.maximum_participants} onChange={(event) => setForm((current) => ({ ...current, maximum_participants: event.target.value }))} /></div></Field>
-            <Field label="Waktu pembayaran (menit)"><Input required type="number" min="15" max="240" value={form.payment_window_minutes} onChange={(event) => setForm((current) => ({ ...current, payment_window_minutes: event.target.value }))} /></Field>
+            <Field label="Waktu pembayaran"><div className="flex min-h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm font-black text-slate-700">1 jam · tetap</div></Field>
             <Field label="Durasi pendaftaran"><div className="flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm font-black text-slate-700">24 jam · tetap</div></Field>
             <Field label="Jeda setelah pendaftaran tutup (menit)"><Input required type="number" min="30" value={form.registration_closes_before_minutes} onChange={(event) => setForm((current) => ({ ...current, registration_closes_before_minutes: event.target.value }))} /></Field>
           </div>

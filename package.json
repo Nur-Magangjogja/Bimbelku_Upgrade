@@ -9,7 +9,9 @@
     "dev": "vite",
     "prebuild": "npm run seo:sitemap",
     "build": "vite build",
-    "postbuild": "node scripts/prerender-guides.mjs && node scripts/prerender-public-meta.mjs",
+    "build:payment-preview": "node scripts/build-payment-design-preview.mjs",
+    "preview:payment-design": "vite preview --host 127.0.0.1 --port 8081 --strictPort --outDir dist-payment-preview",
+    "postbuild": "node scripts/prerender-guides.mjs && node scripts/prerender-public-meta.mjs && node scripts/check-built-seo.mjs",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -45,6 +47,7 @@
     "check:performance-revision1": "node scripts/check-performance-revision1.mjs",
     "check:performance-whole-site": "node scripts/check-performance-revision2-whole-site.mjs",
     "check:payment-fix": "node scripts/check-payment-error-fix.mjs",
+    "check:payment-return": "node scripts/check-payment-return.mjs",
     "check:admin-payment-fix": "node scripts/check-admin-payment-verification-fix.mjs",
     "check:navigation-attention": "node scripts/check-navigation-attention.mjs",
     "check:notification-ux": "node scripts/check-notification-ux-fix.mjs",
@@ -87,7 +90,10 @@
     "check:user-testing-stage2": "node scripts/check-stage2-bab-monitoring-scalability.mjs",
     "check:user-testing-stage3": "node scripts/check-stage3-visual-finalization.mjs",
     "preview:full": "node scripts/run-local-preview.mjs",
-    "preview:frontend": "vite preview"
+    "preview:frontend": "vite preview",
+    "check:testing-matrix": "node scripts/check-testing-matrix.mjs",
+    "check:testing-stage1": "node scripts/check-testing-stage1.mjs",
+    "audit:testing-readiness": "php scripts/audit-testing-readiness.php"
   },
   "dependencies": {
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",

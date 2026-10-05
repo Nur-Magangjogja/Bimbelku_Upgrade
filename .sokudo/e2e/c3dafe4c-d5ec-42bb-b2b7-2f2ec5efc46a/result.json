@@ -1,0 +1,141 @@
+{
+  "runId": "c3dafe4c-d5ec-42bb-b2b7-2f2ec5efc46a",
+  "workspace": "aab58d15-5141-4924-8999-1b73575ec5ad",
+  "trigger": "agent",
+  "status": "failed",
+  "jobs": [
+    {
+      "flowPath": "e2e/login-invalid-credentials.yaml",
+      "flowName": "login-invalid-credentials",
+      "status": "failed",
+      "steps": [
+        {
+          "index": 0,
+          "label": "launchApp",
+          "sourceLine": 5,
+          "status": "success",
+          "workedMs": 357
+        },
+        {
+          "index": 1,
+          "label": "assertVisible \"Masuk ke BimbelKu\"",
+          "sourceLine": 6,
+          "status": "success",
+          "workedMs": 227
+        },
+        {
+          "index": 2,
+          "label": "inputText \"invalid@example.test\"",
+          "sourceLine": 7,
+          "status": "success",
+          "workedMs": 1
+        },
+        {
+          "index": 3,
+          "label": "inputText \"wrongpass123\"",
+          "sourceLine": 10,
+          "status": "success",
+          "workedMs": 2
+        },
+        {
+          "index": 4,
+          "label": "tapOn \"Masuk\"",
+          "sourceLine": 13,
+          "status": "success",
+          "workedMs": 26
+        },
+        {
+          "index": 5,
+          "label": "assertVisible \"Periksa email dan kata sandi, lalu coba lagi.\"",
+          "sourceLine": 14,
+          "status": "failed",
+          "workedMs": 17013,
+          "error": {
+            "kind": "not-found",
+            "message": "no element matched within 17000ms",
+            "sourceLine": 14,
+            "screenshotPath": "C:\\laragon\\www\\Website_Bimbelku Upgrade\\.sokudo\\e2e\\c3dafe4c-d5ec-42bb-b2b7-2f2ec5efc46a\\login-invalid-credentials\\step-5-fail.png",
+            "consoleTail": [
+              "error: The Content Security Policy directive 'frame-ancestors' is ignored when delivered via a <meta> element."
+            ],
+            "domExcerpt": "<body>\n    <div id=\"root\"><section aria-label=\"Notifications alt+T\" tabindex=\"-1\" aria-live=\"polite\" aria-relevant=\"additions text\" aria-atomic=\"false\"></section><main class=\"auth-shell relative grid h-dvh min-h-0 w-full overflow-hidden bg-white\"><style>\n  .auth-shell { grid-template-columns: minmax(0, 1fr); }\n  .auth-brand-panel {\n    background-color: #f2a36f;\n    background-image:\n      radial-gradient(circle at 72% 48%, rgb(255 247 237 / 0.38), transparent 21rem),\n      radial-gradient(circle at 10% 88%, rgb(15 118 110 / 0.13), transparent 18rem),\n      linear-gradient(145deg, #f7b681 0%, #ee9667 100%);\n  }\n  .auth-brand-panel::after {\n    content: \"\";\n    position: absolute;\n    inset: 0;\n    z-index: 0;\n    pointer-events: none;\n    background-image: radial-gradient(circle, rgb(20 33 61 / 0.18) 1.2px, transparent 1.5px);\n    background-size: 30px 30px;\n    mask-image: linear-gradient(125deg, transparent 12%, #000 38%, transparent 76%);\n  }\n  .auth-brand-art {\n    position: absolute;\n    inset: 0;\n    overflow: hidden;\n    pointer-events: none;\n    opacity: 0.55;\n  }\n  .auth-brand-art svg { width: 100%; height: 100%; }\n  .auth-form-scroll {\n    position: relative;\n    height: 100dvh;\n    overflow-y: auto;\n    overscroll-behavior: contain;\n    padding: 0.75rem 1.25rem 1.5rem;\n    scrollbar-gutter: stable;\n    background-color: #f7f1e8;\n    background-image:\n      radial-gradient(circle at 88% 12%, rgb(249 165 76 / 0.13), transparent 18rem),\n      radial-gradient(circle at 8% 82%, rgb(15 118 110 / 0.09), transparent 16rem);\n  }\n  .auth-form-content { position: relative; z-index: 1; }\n  .auth-login-form .auth-control {\n    display: flex;\n    min-height: 3.5rem;\n    align-items: center;\n    overflow: hidden;\n    border: 2px solid #cbd5e1;\n    border-radius: 1rem;\n    background: #fff;\n    box-shadow: 0 9px 24px rgb(20 33 61 / 0.07);\n    transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;\n  }\n  .auth-login-form .auth-control:hover { bor…"
+          },
+          "screenshotPath": "C:\\laragon\\www\\Website_Bimbelku Upgrade\\.sokudo\\e2e\\c3dafe4c-d5ec-42bb-b2b7-2f2ec5efc46a\\login-invalid-credentials\\step-5-fail.png"
+        }
+      ],
+      "startedMs": 1790997541253,
+      "endedMs": 1790997559105
+    },
+    {
+      "flowPath": "e2e/protected-student-redirect.yaml",
+      "flowName": "protected-student-redirect",
+      "status": "passed",
+      "steps": [
+        {
+          "index": 0,
+          "label": "launchApp",
+          "sourceLine": 5,
+          "status": "success",
+          "workedMs": 326
+        },
+        {
+          "index": 1,
+          "label": "assertVisible \"Masuk ke BimbelKu\"",
+          "sourceLine": 6,
+          "status": "success",
+          "workedMs": 428
+        },
+        {
+          "index": 2,
+          "label": "takeScreenshot \"student-login-redirect\"",
+          "sourceLine": 7,
+          "status": "success",
+          "workedMs": 104,
+          "screenshotPath": "C:\\laragon\\www\\Website_Bimbelku Upgrade\\.sokudo\\e2e\\c3dafe4c-d5ec-42bb-b2b7-2f2ec5efc46a\\protected-student-redirect\\student-login-redirect.png"
+        }
+      ],
+      "startedMs": 1790997559111,
+      "endedMs": 1790997559977
+    },
+    {
+      "flowPath": "e2e/public-catalog-smoke.yaml",
+      "flowName": "public-catalog-smoke",
+      "status": "passed",
+      "steps": [
+        {
+          "index": 0,
+          "label": "launchApp",
+          "sourceLine": 5,
+          "status": "success",
+          "workedMs": 289
+        },
+        {
+          "index": 1,
+          "label": "assertVisible \"Temukan bidang belajar yang tepat.\"",
+          "sourceLine": 6,
+          "status": "success",
+          "workedMs": 218
+        },
+        {
+          "index": 2,
+          "label": "assertVisible \"Program belajar terpadu\"",
+          "sourceLine": 7,
+          "status": "success",
+          "workedMs": 1918
+        },
+        {
+          "index": 3,
+          "label": "takeScreenshot \"program-catalog\"",
+          "sourceLine": 8,
+          "status": "success",
+          "workedMs": 92,
+          "screenshotPath": "C:\\laragon\\www\\Website_Bimbelku Upgrade\\.sokudo\\e2e\\c3dafe4c-d5ec-42bb-b2b7-2f2ec5efc46a\\public-catalog-smoke\\program-catalog.png"
+        }
+      ],
+      "startedMs": 1790997559980,
+      "endedMs": 1790997562503
+    }
+  ],
+  "startedMs": 1790997541246,
+  "endedMs": 1790997562504
+}

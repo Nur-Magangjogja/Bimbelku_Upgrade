@@ -14,6 +14,7 @@ class CurriculumSubject extends Model
         'grades' => 'array',
         'is_elective' => 'boolean',
         'is_active' => 'boolean',
+        'show_chapter_selection' => 'boolean',
     ];
 
     public function chapters(): HasMany

@@ -142,7 +142,7 @@ class ClassroomController extends Controller
                 'pending_schedule_change' => $booking->scheduleChangeRequests->first(),
                 'latest_report' => $booking->reports->first(),
                 'latest_dispute' => $booking->disputes->first(),
-                'package_progress' => $packageSubject ? $chapterProgress : null,
+                'package_progress' => $packageSubject && $packageChapters->isNotEmpty() ? $chapterProgress : null,
                 'completion_steps' => [
                     'check_in' => (bool) $booking->student_confirmed_at,
                     'attendance' => $attendanceComplete,
@@ -201,6 +201,7 @@ class ClassroomController extends Controller
             'package_name' => $packageSubject->package?->plan?->name ?? 'Paket Belajar',
             'package_status' => $packageSubject->package?->status,
             'subject_name' => $packageSubject->subject_name,
+            'learning_goal' => $packageSubject->learning_goal,
             'education_level' => $packageSubject->package?->education_level,
             'grade' => $packageSubject->package?->grade,
             'student' => [

@@ -12,7 +12,7 @@ export default function PendingPaymentPopup() {
   const [order, setOrder] = useState<any>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
-  const [paymentWindowSeconds, setPaymentWindowSeconds] = useState(30 * 60);
+  const [paymentWindowSeconds, setPaymentWindowSeconds] = useState(60 * 60);
   
   // State untuk Loading & Modal Konfirmasi
   const [isCancelling, setIsCancelling] = useState(false);
@@ -82,7 +82,7 @@ export default function PendingPaymentPopup() {
     const orderTime = new Date(order.created_at).getTime();
     const deadline = order.payment_due_at
       ? new Date(order.payment_due_at).getTime()
-      : orderTime + (30 * 60 * 1000);
+      : orderTime + (60 * 60 * 1000);
 
     if (isNaN(orderTime) || isNaN(deadline)) {
         setIsVisible(false);

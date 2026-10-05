@@ -14,7 +14,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 
 class GuestPackageOrderController extends Controller
 {
@@ -58,7 +57,10 @@ class GuestPackageOrderController extends Controller
             'subjects.min' => 'Pilih minimal satu mata pelajaran.',
             'subjects.*.weekdays.min' => 'Pilih minimal satu hari belajar untuk setiap mapel.',
             'subjects.*.schedules.min' => 'Atur minimal satu jadwal belajar untuk setiap mapel.',
+            'subjects.*.learning_goal.string' => 'Target atau materi belajar harus berupa teks.',
+            'subjects.*.learning_goal.max' => 'Target atau materi belajar maksimal 1500 karakter per mapel.',
         ]);
+        $data['subjects'] = \App\Support\LearningFocus::normalizeSubjects($data['subjects'], ! empty($data['learning_program_id']), $data['education_level'], $data['grade']);
         $count = (int) ($data['participant_count'] ?? 1);
         $pricing->forCount($count);
         $purchaserParticipates = (bool) ($data['purchaser_participates'] ?? true);
@@ -78,8 +80,6 @@ class GuestPackageOrderController extends Controller
             app(\App\Services\LearningProgramSelection::class)->validate(
                 (int) $data['learning_program_id'], (int) $plan->id, $data['education_level'], $data['grade'], $data['subjects']
             );
-        } elseif (collect($data['subjects'])->contains(fn ($subject) => empty($subject['curriculum_chapter_ids']))) {
-            throw ValidationException::withMessages(['subjects' => 'Pilih sedikitnya satu Bab untuk setiap mapel di luar program.']);
         }
         abort_if(count($data['subjects']) > $plan->maximum_subjects, 422, 'Jumlah mapel melebihi paket.');
         abort_if(collect($data['subjects'])->sum(fn ($item) => count($item['schedules'])) !== $plan->session_count, 422, 'Jumlah jadwal tidak sesuai sesi paket.');

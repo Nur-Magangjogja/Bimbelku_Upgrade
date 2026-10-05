@@ -17,7 +17,7 @@ const steps: Step[] = [
   {
     icon: SlidersHorizontal,
     title: "Susun kebutuhan",
-    short: "Mapel, Bab, mode, dan jadwal",
+    short: "Mapel, target, mode, dan jadwal",
     description: "Pilih kebutuhan belajar sedetail yang kamu tahu. Semua pilihan tetap dapat diperiksa sebelum lanjut.",
     detail: ["Pilih jenjang dan mata pelajaran", "Atur mode online atau tatap muka", "Tentukan hari dan jam yang memungkinkan"],
     accent: "bg-amber-100 text-amber-800",
@@ -42,8 +42,8 @@ const steps: Step[] = [
     icon: BookOpenCheck,
     title: "Belajar & pantau",
     short: "Materi dan laporan tercatat",
-    description: "Sesi berjalan sesuai jadwal. Bab yang dipelajari dan laporan sesi dapat dilihat kembali.",
-    detail: ["Jadwal kelas tersimpan", "Progress materi diperbarui per Bab", "Riwayat belajar tetap bisa ditinjau"],
+    description: "Sesi berjalan sesuai jadwal. Materi yang dipelajari dan laporan tutor dapat dilihat kembali.",
+    detail: ["Jadwal kelas tersimpan", "Hasil belajar dicatat setiap sesi", "Riwayat belajar tetap bisa ditinjau"],
     accent: "bg-sky-100 text-sky-800",
   },
 ];

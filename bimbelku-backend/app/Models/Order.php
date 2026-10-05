@@ -9,7 +9,7 @@ class Order extends Model
 {
     use HasAutomaticPublicCode;
 
-    protected $guarded = ['id', 'wallet_reserved_amount', 'wallet_applied_amount', 'wallet_reservation_version', 'payment_provider'];
+    protected $guarded = ['id', 'wallet_reserved_amount', 'wallet_applied_amount', 'wallet_reservation_version', 'payment_provider', 'gateway_creation_uncertain'];
 
     protected $hidden = ['payment_proof'];
 
@@ -29,6 +29,9 @@ class Order extends Model
         'discount_amount' => 'decimal:2',
         'top_up_due_at' => 'datetime',
         'gateway_expires_at' => 'datetime',
+        'gateway_expected_amount' => 'decimal:2',
+        'gateway_last_checked_at' => 'datetime',
+        'gateway_creation_uncertain' => 'boolean',
         'gateway_paid_at' => 'datetime',
     ];
 

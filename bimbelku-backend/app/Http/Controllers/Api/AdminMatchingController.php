@@ -41,8 +41,13 @@ class AdminMatchingController extends Controller
 
         $query = BookingRequest::query()
             ->whereNotNull('package_subject_id')
-            ->whereIn('status', $scope === 'history' ? self::HISTORY_STATUSES : self::ACTIVE_STATUSES)
-            ->when($scope === 'active', fn ($active) => $active->whereDate('scheduled_date', '>=', today()))
+            ->when($scope === 'history', fn ($history) => $history->whereIn('status', self::HISTORY_STATUSES))
+            ->when($scope === 'active', fn ($active) => $active->where(function (Builder $visible) {
+                $visible->where(function (Builder $upcoming) {
+                    $upcoming->whereIn('status', self::ACTIVE_STATUSES)
+                        ->whereDate('scheduled_date', '>=', today());
+                })->orWhere(fn (Builder $attention) => $attention->matchingNeedsAttention());
+            }))
             ->matchingAnchors()
             ->with([
                 'student:id,name,email',
@@ -334,31 +339,7 @@ class AdminMatchingController extends Controller
 
     private function applyAttentionFilter(Builder $query): void
     {
-        $query->where(function (Builder $attention) {
-            $attention
-                ->where(function (Builder $noTeacher) {
-                    $noTeacher
-                        ->where('status', 'no_teacher')
-                        ->whereDate('scheduled_date', '>=', today());
-                })
-                ->orWhere(function (Builder $expired) {
-                    $expired
-                        ->where('status', 'expired')
-                        ->whereDate('scheduled_date', '>=', today());
-                })
-                ->orWhere(function (Builder $pending) {
-                    $pending
-                        ->where('status', 'teacher_pending')
-                        ->whereNotNull('teacher_response_deadline')
-                        ->where('teacher_response_deadline', '<=', now());
-                })
-                ->orWhere(function (Builder $expiring) {
-                    $expiring
-                        ->whereIn('status', ['matching', 'teacher_pending'])
-                        ->whereNotNull('search_expires_at')
-                        ->whereBetween('search_expires_at', [now(), now()->addHours(6)]);
-                });
-        });
+        $query->matchingNeedsAttention();
     }
 
     private function formatSummary(BookingRequest $bookingRequest): array
@@ -479,7 +460,10 @@ class AdminMatchingController extends Controller
             return 'Batas pencarian atau waktu mulai kelas telah terlewati.';
         }
 
-        if ($activeOffer?->status === 'pending' && $activeOffer->expires_at?->isPast()) {
+        if (
+            ($bookingRequest->status === 'teacher_pending' && $bookingRequest->teacher_response_deadline?->lte(now()))
+            || ($activeOffer?->status === 'pending' && $activeOffer->expires_at?->lte(now()))
+        ) {
             return 'Batas jawaban tutor telah terlewati dan perlu disinkronkan.';
         }
 

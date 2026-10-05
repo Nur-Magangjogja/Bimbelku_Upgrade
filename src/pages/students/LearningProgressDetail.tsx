@@ -170,12 +170,13 @@ function PackageProgressDetail({ item, classes, onOpenReport }: { item: StudentP
         title={item.plan?.name || "Paket Belajar"}
         subtitle={`${(item.subjects || []).map((subject) => subject.name).join(" · ") || "Materi belajar"} · ${item.package_code}`}
         percent={stats.percent}
+        progressLabel={stats.tracksChapters ? "Progress materi" : "Pertemuan selesai"}
         accent="brand"
       />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryCard label="Bab selesai" value={`${stats.completed}/${stats.total}`} icon={CheckCircle2} />
-        <SummaryCard label="Sedang dipelajari" value={stats.inProgress} icon={BookOpen} />
+        <SummaryCard label={stats.tracksChapters ? "Bab selesai" : "Mapel dipelajari"} value={stats.tracksChapters ? `${stats.completed}/${stats.total}` : (item.subjects || []).length} icon={CheckCircle2} />
+        <SummaryCard label={stats.tracksChapters ? "Sedang dipelajari" : "Laporan tersedia"} value={stats.tracksChapters ? stats.inProgress : reports.length} icon={BookOpen} />
         <SummaryCard label="Pertemuan selesai" value={`${item.used_sessions}/${item.total_sessions}`} icon={CalendarDays} />
         <SummaryCard label="Sisa sesi" value={item.remaining_sessions} icon={Clock3} />
       </div>
@@ -186,7 +187,7 @@ function PackageProgressDetail({ item, classes, onOpenReport }: { item: StudentP
         <section className="rounded-[1.75rem] border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/35 to-blue-50/45 p-4 shadow-[0_14px_36px_rgba(30,64,175,0.07)] sm:p-6">
           <div className="flex items-start gap-3">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-indigo-100 text-indigo-700"><GraduationCap size={20} /></span>
-            <div><h2 className="text-lg font-black text-slate-900">Progress materi</h2><p className="mt-1 text-sm leading-6 text-slate-500">Progress dihitung dari Bab yang benar-benar ditandai selesai oleh tutor. Jumlah sesi tidak dipakai sebagai persentase materi.</p></div>
+            <div><h2 className="text-lg font-black text-slate-900">Target dan hasil belajar</h2><p className="mt-1 text-sm leading-6 text-slate-500">{stats.tracksChapters ? "Progress materi dihitung dari Bab yang ditandai selesai oleh tutor." : "Persentase di atas menunjukkan pertemuan yang sudah selesai, bukan penguasaan materi. Hasil belajar dan penilaian tutor dapat dilihat pada laporan setiap sesi."}</p></div>
           </div>
           <div className="mt-5 space-y-5">
             {(item.subjects || []).map((subject) => <PackageSubjectSection key={subject.id} subject={subject} />)}
@@ -195,7 +196,7 @@ function PackageProgressDetail({ item, classes, onOpenReport }: { item: StudentP
       ) : (
         <section className="rounded-[1.75rem] border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/35 to-blue-50/45 p-4 shadow-[0_14px_36px_rgba(30,64,175,0.07)] sm:p-6">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-            <div><h2 className="flex items-center gap-2 text-lg font-black text-slate-900"><History size={19} className="text-indigo-600" />Riwayat progress per sesi</h2><p className="mt-1 text-sm leading-6 text-slate-500">Setiap laporan memperlihatkan perubahan Bab pada sesi tersebut, bukan hanya kondisi terakhir.</p></div>
+            <div><h2 className="flex items-center gap-2 text-lg font-black text-slate-900"><History size={19} className="text-indigo-600" />Riwayat progress per sesi</h2><p className="mt-1 text-sm leading-6 text-slate-500">Lihat materi yang dibahas, hasil belajar, kesulitan, dan latihan berikutnya pada setiap sesi.</p></div>
             <Button asChild variant="outline" className="rounded-xl"><Link to="/student/my-classes">Lihat seluruh sesi</Link></Button>
           </div>
           {reports.length === 0 ? (
@@ -215,7 +216,7 @@ function PackageProgressDetail({ item, classes, onOpenReport }: { item: StudentP
                       <div className="mt-4 space-y-2">
                         {report.chapters.map((chapter) => <ProgressChangeRow key={`${row.id}-${chapter.chapter}`} chapter={chapter} />)}
                       </div>
-                    ) : !report.no_material_change ? <p className="mt-4 rounded-xl bg-white p-3 text-sm text-slate-500">Laporan ini belum memiliki perubahan Bab terstruktur.</p> : null}
+                    ) : !report.no_material_change ? <p className="mt-4 rounded-xl bg-white p-3 text-sm text-slate-500">Materi dicatat langsung oleh tutor sesuai kebutuhan belajar, tanpa pilihan Bab dari katalog. Buka laporan lengkap untuk melihat hasil dan latihan berikutnya.</p> : null}
                     {report.notes && <p className="mt-3 rounded-xl bg-white p-3 text-sm leading-6 text-slate-600"><b>Catatan tutor:</b> {report.notes}</p>}
                     <Button type="button" variant="outline" onClick={() => onOpenReport(row.id)} className="mt-4 rounded-xl border-indigo-100 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"><MessageSquareText size={16} className="mr-2" />Lihat laporan lengkap</Button>
                   </article>
@@ -241,11 +242,12 @@ function PackageSubjectSection({ subject }: { subject: PackageSubjectProgress })
           <h3 className="mt-1 text-lg font-black text-slate-900">{subject.name}</h3>
           {subject.teacher?.name && <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-slate-500"><UserRound size={13} /> Tutor {subject.teacher.name}</p>}
         </div>
-        <span className="self-start rounded-full bg-white px-3 py-1.5 text-[10px] font-black text-indigo-600 ring-1 ring-indigo-100">{completed}/{chapters.length} Bab</span>
+        <span className="self-start rounded-full bg-white px-3 py-1.5 text-[10px] font-black text-indigo-600 ring-1 ring-indigo-100">{chapters.length ? `${completed}/${chapters.length} Bab` : `${subject.allocated_sessions} sesi`}</span>
       </div>
+      {subject.learning_goal && <div className="mt-3 rounded-xl bg-white p-4"><p className="text-xs font-bold text-indigo-700">Target atau materi yang ingin difokuskan</p><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{subject.learning_goal}</p></div>}
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         {chapters.map((chapter) => <PackageChapterRow key={`${subject.id}-${chapter.curriculum_chapter_id || chapter.chapter}`} chapter={chapter} />)}
-        {chapters.length === 0 && <p className="rounded-xl bg-white p-4 text-sm text-slate-500 sm:col-span-2">Belum ada Bab yang tersimpan untuk mata pelajaran ini.</p>}
+        {chapters.length === 0 && <p className="rounded-xl bg-white p-4 text-sm text-slate-500 sm:col-span-2">Tutor menyesuaikan materi dengan target belajar. Hasil pembelajaran dicatat pada laporan setiap sesi.</p>}
       </div>
     </div>
   );
@@ -322,8 +324,8 @@ function ProgressChangeRow({ chapter }: { chapter: ProgressHistoryChapter }) {
   return <div className="rounded-xl bg-white p-3"><p className="text-sm font-black text-slate-900">{chapter.chapter}</p><p className="mt-2 text-xs font-semibold text-slate-500">{topicStatusLabel(chapter.status_before)} <span className="px-1 text-indigo-400">→</span> <span className="font-black text-indigo-700">{topicStatusLabel(chapter.status_after, Boolean(chapter.needs_review))}</span></p>{chapter.notes && <p className="mt-2 text-xs leading-5 text-slate-500">{chapter.notes}</p>}</div>;
 }
 
-function ProgressHeader({ type, title, subtitle, percent, accent: _accent }: { type: string; title: string; subtitle: string; percent: number; accent: "brand" }) {
-  return <section className="relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-slate-950 via-indigo-950 to-blue-800 p-5 text-white shadow-[0_24px_64px_rgba(15,23,42,0.20)] sm:rounded-[2rem] sm:p-8"><div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-blue-400/20 blur-3xl" /><div aria-hidden="true" className="pointer-events-none absolute -bottom-28 left-1/3 h-56 w-56 rounded-full bg-indigo-400/15 blur-3xl" /><div className="relative"><Link to="/student/progress" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.08] px-3 text-xs font-black text-white transition hover:bg-white/15"><ArrowLeft size={15} /> Semua Progress</Link><div className="mt-6 flex flex-col justify-between gap-6 md:flex-row md:items-end"><div className="min-w-0"><p className="text-xs font-black uppercase tracking-[.18em] text-blue-200">{type}</p><h1 className="mt-2 break-words text-2xl font-black tracking-tight sm:text-3xl">{title}</h1><p className="mt-2 break-words text-sm text-slate-300">{subtitle}</p></div><div className="w-full rounded-2xl border border-white/10 bg-white/[0.08] p-4 backdrop-blur-sm md:max-w-xs"><div className="flex items-end justify-between gap-3"><p className="text-xs font-black uppercase tracking-wider text-slate-300">Progress materi</p><p className="text-3xl font-black text-blue-200">{percent}%</p></div><div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-[width] duration-500" style={{ width: `${percent}%` }} /></div></div></div></div></section>;
+function ProgressHeader({ type, title, subtitle, percent, accent: _accent, progressLabel = "Progress materi" }: { type: string; title: string; subtitle: string; percent: number; accent: "brand"; progressLabel?: string }) {
+  return <section className="relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-slate-950 via-indigo-950 to-blue-800 p-5 text-white shadow-[0_24px_64px_rgba(15,23,42,0.20)] sm:rounded-[2rem] sm:p-8"><div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-blue-400/20 blur-3xl" /><div aria-hidden="true" className="pointer-events-none absolute -bottom-28 left-1/3 h-56 w-56 rounded-full bg-indigo-400/15 blur-3xl" /><div className="relative"><Link to="/student/progress" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.08] px-3 text-xs font-black text-white transition hover:bg-white/15"><ArrowLeft size={15} /> Semua Progress</Link><div className="mt-6 flex flex-col justify-between gap-6 md:flex-row md:items-end"><div className="min-w-0"><p className="text-xs font-black uppercase tracking-[.18em] text-blue-200">{type}</p><h1 className="mt-2 break-words text-2xl font-black tracking-tight sm:text-3xl">{title}</h1><p className="mt-2 break-words text-sm text-slate-300">{subtitle}</p></div><div className="w-full rounded-2xl border border-white/10 bg-white/[0.08] p-4 backdrop-blur-sm md:max-w-xs"><div className="flex items-end justify-between gap-3"><p className="text-xs font-black uppercase tracking-wider text-slate-300">{progressLabel}</p><p className="text-3xl font-black text-blue-200">{percent}%</p></div><div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-[width] duration-500" style={{ width: `${percent}%` }} /></div></div></div></div></section>;
 }
 
 function SummaryCard({ label, value, icon: Icon }: { label: string; value: string | number; icon: LucideIcon }) {

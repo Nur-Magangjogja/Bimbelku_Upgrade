@@ -125,7 +125,7 @@ const StudentNotifications = routeLazy(exactPath("/student/notifications"), () =
 const CheapClasses = routeLazy(exactPath("/student/kelas-murah"), () => import("./pages/students/CheapClasses"));
 
 // 7. Payment
-const PaymentPage = routeLazy(exactPath("/payment"), () => import("./pages/pembayaran/PaymentPage"));
+const PaymentPage = routeLazy(exactPath("/payment", "/payment-preview"), () => import("./pages/pembayaran/PaymentPage"));
 
 // 8. Halaman Common (Bantuan)
 const StudentHelp = routeLazy(exactPath("/student/help"), () => import("./pages/students/Help"));
@@ -174,6 +174,11 @@ const LegacyPackageRedirect = () => {
 
   const query = legacyParams.toString();
   return <Navigate to={`/student/packages/new${query ? `?${query}` : ""}`} replace />;
+};
+
+const LegacyAdminLoginRedirect = () => {
+  const location = useLocation();
+  return <Navigate to={`/login${location.search}${location.hash}`} state={location.state} replace />;
 };
 
 const LegacyTeacherCheapClassRedirect = () => {
@@ -290,7 +295,7 @@ export const AppContent = () => (
             <Route path="/register" element={<WebsiteContentProvider><Register /></WebsiteContentProvider>} />
             <Route path="/jadi-tutor" element={<WebsiteContentProvider><JadiTutor /></WebsiteContentProvider>} />
             <Route path="/login" element={<WebsiteContentProvider><Login /></WebsiteContentProvider>} />
-            <Route path="/admin/login" element={<WebsiteContentProvider><Login adminOnly /></WebsiteContentProvider>} />
+            <Route path="/admin/login" element={<LegacyAdminLoginRedirect />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/oauth/google/callback" element={<GoogleAuthCallback />} />
@@ -301,6 +306,7 @@ export const AppContent = () => (
             <Route path="/terms" element={<TermsConditions />} />
             <Route path="/why-us" element={<WebsiteContentProvider><WhyUs /></WebsiteContentProvider>} />
             <Route path="/access-denied" element={<AccessDenied />} />
+            {import.meta.env.VITE_PAYMENT_DESIGN_PREVIEW === "true" && ["localhost", "127.0.0.1"].includes(window.location.hostname) && <Route path="/payment-preview" element={<PaymentPage />} />}
 
             <Route path={'/verify-email'} element={<VerifyEmail />} />
 

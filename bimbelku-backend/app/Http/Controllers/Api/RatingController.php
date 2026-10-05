@@ -63,9 +63,7 @@ class RatingController extends Controller
 
             $classroomId = $lockedParticipant->order?->classroom_id
                 ?? $lockedBooking->order?->classroom_id;
-            if (!$classroomId) {
-                abort(422, 'Data ruang kelas belum tersedia. Hubungi admin sebelum memberi ulasan.');
-            }
+            // Paket Belajar memakai booking sebagai identitas sesi, tanpa Classroom lama.
 
             $record = Rating::create([
                 'classroom_id' => $classroomId,

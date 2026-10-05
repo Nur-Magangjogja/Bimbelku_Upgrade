@@ -26,6 +26,7 @@ class PackageCheckoutService
 {
     public function __construct(
         private readonly TeacherMatchingService $matchingService,
+        private readonly PackageEarningsAllocation $earningsAllocation,
     ) {}
 
     public function calculateDiscount(
@@ -493,7 +494,7 @@ class PackageCheckoutService
             ->sortBy('scheduled_start_at')
             ->first()
             ?->scheduled_start_at;
-        $paymentDueAt = now()->addHours(48);
+        $paymentDueAt = now()->addMinutes(\App\Support\PaymentWindow::MINUTES);
         if ($firstSessionAt) {
             $usesPreferredTutors = $package->renewal_of_id
                 && $package->subjects->isNotEmpty()
@@ -578,13 +579,19 @@ class PackageCheckoutService
 
         $commissionPercent = 20.0;
         $durationHours = (int) ($package->duration_hours ?? 1);
+        $earnings = $this->earningsAllocation->forPackage($package);
         $firstBooking = null;
         $firstSessionAt = $package->subjects->flatMap->sessions->sortBy('scheduled_start_at')->first()?->scheduled_start_at;
 
         foreach ($package->subjects as $subject) {
             abort_unless($subject->assigned_teacher_id, 422, 'Semua tutor harus menerima paket terlebih dahulu.');
-            $tutorHourlyGross = (float) ($subject->tutor_hourly_gross ?? $subject->unit_price);
+            $subjectEarnings = $earnings[$subject->id] ?? null;
             foreach ($subject->sessions as $session) {
+                $sessionEarnings = $subjectEarnings['sessions'][$session->id] ?? null;
+                abort_unless($sessionEarnings, 422, 'Rincian pendapatan sesi tidak lengkap. Hubungi admin sebelum kelas diaktifkan.');
+                $gross = $sessionEarnings['gross_amount'];
+                $teacherNet = $sessionEarnings['teacher_net_amount'];
+                $hourlyGross = $gross / $durationHours;
                 $anchor = $subject->bookingRequest;
                 $bookingRequest = $session->sequence === 1 && $anchor
                     ? $anchor
@@ -609,19 +616,17 @@ class PackageCheckoutService
                         'latitude' => $package->learning_mode === 'offline' ? $package->student->latitude : null,
                         'longitude' => $package->learning_mode === 'offline' ? $package->student->longitude : null,
                         'status' => 'confirmed',
-                        'hourly_rate' => $tutorHourlyGross,
-                        'total_amount' => $tutorHourlyGross * $durationHours,
+                        'hourly_rate' => $hourlyGross,
+                        'total_amount' => $gross,
                     ]);
 
                 $bookingRequest->update([
                     'matched_teacher_id' => $subject->assigned_teacher_id,
                     'status' => 'confirmed',
-                    'hourly_rate' => $tutorHourlyGross,
-                    'total_amount' => $tutorHourlyGross * $durationHours,
+                    'hourly_rate' => $hourlyGross,
+                    'total_amount' => $gross,
                     'payment_due_at' => null,
                 ]);
-                $gross = $tutorHourlyGross * $durationHours;
-                $teacherNet = max(0, $gross * (100 - $commissionPercent) / 100);
                 $booking = Booking::updateOrCreate(
                     ['booking_request_id' => $bookingRequest->id],
                     [
@@ -633,7 +638,7 @@ class PackageCheckoutService
                         'duration_hours' => $durationHours,
                         'learning_mode' => $package->learning_mode,
                         'class_type' => 'private',
-                        'hourly_rate' => $tutorHourlyGross,
+                        'hourly_rate' => $hourlyGross,
                         'total_amount' => $gross,
                         'gross_amount' => $gross,
                         'teacher_net_amount' => $teacherNet,

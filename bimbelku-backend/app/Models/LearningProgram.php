@@ -8,7 +8,12 @@ class LearningProgram extends Model
 {
     protected $guarded = ['id'];
 
-    protected $casts = ['is_active' => 'boolean', 'sort_order' => 'integer'];
+    protected $casts = ['is_active' => 'boolean', 'sort_order' => 'integer', 'education_levels' => 'array'];
+
+    public function availableEducationLevels(): array
+    {
+        return $this->education_levels ?: [$this->education_level];
+    }
 
     public function subjects()
     {

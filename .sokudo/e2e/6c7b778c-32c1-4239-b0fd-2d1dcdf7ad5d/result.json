@@ -1,0 +1,86 @@
+{
+  "runId": "6c7b778c-32c1-4239-b0fd-2d1dcdf7ad5d",
+  "workspace": "aab58d15-5141-4924-8999-1b73575ec5ad",
+  "trigger": "agent",
+  "status": "failed",
+  "jobs": [
+    {
+      "flowPath": "e2e/login-invalid-credentials.yaml",
+      "flowName": "login-invalid-credentials",
+      "status": "failed",
+      "steps": [
+        {
+          "index": 0,
+          "label": "launchApp",
+          "sourceLine": 5,
+          "status": "success",
+          "workedMs": 252
+        },
+        {
+          "index": 1,
+          "label": "assertVisible \"Masuk ke BimbelKu\"",
+          "sourceLine": 6,
+          "status": "success",
+          "workedMs": 19
+        },
+        {
+          "index": 2,
+          "label": "tapOn \"#login-email\"",
+          "sourceLine": 7,
+          "status": "failed",
+          "workedMs": 17013,
+          "error": {
+            "kind": "not-found",
+            "message": "no element matched within 17000ms",
+            "sourceLine": 7,
+            "screenshotPath": "C:\\laragon\\www\\Website_Bimbelku Upgrade\\.sokudo\\e2e\\6c7b778c-32c1-4239-b0fd-2d1dcdf7ad5d\\login-invalid-credentials\\step-2-fail.png",
+            "consoleTail": [
+              "error: The Content Security Policy directive 'frame-ancestors' is ignored when delivered via a <meta> element."
+            ],
+            "domExcerpt": "<body>\n    <div id=\"root\"><main class=\"auth-shell relative grid h-dvh min-h-0 w-full overflow-hidden bg-white\"><style>\n  .auth-shell { grid-template-columns: minmax(0, 1fr); }\n  .auth-brand-panel {\n    background-color: #f2a36f;\n    background-image:\n      radial-gradient(circle at 72% 48%, rgb(255 247 237 / 0.38), transparent 21rem),\n      radial-gradient(circle at 10% 88%, rgb(15 118 110 / 0.13), transparent 18rem),\n      linear-gradient(145deg, #f7b681 0%, #ee9667 100%);\n  }\n  .auth-brand-panel::after {\n    content: \"\";\n    position: absolute;\n    inset: 0;\n    z-index: 0;\n    pointer-events: none;\n    background-image: radial-gradient(circle, rgb(20 33 61 / 0.18) 1.2px, transparent 1.5px);\n    background-size: 30px 30px;\n    mask-image: linear-gradient(125deg, transparent 12%, #000 38%, transparent 76%);\n  }\n  .auth-brand-art {\n    position: absolute;\n    inset: 0;\n    overflow: hidden;\n    pointer-events: none;\n    opacity: 0.55;\n  }\n  .auth-brand-art svg { width: 100%; height: 100%; }\n  .auth-form-scroll {\n    position: relative;\n    height: 100dvh;\n    overflow-y: auto;\n    overscroll-behavior: contain;\n    padding: 0.75rem 1.25rem 1.5rem;\n    scrollbar-gutter: stable;\n    background-color: #f7f1e8;\n    background-image:\n      radial-gradient(circle at 88% 12%, rgb(249 165 76 / 0.13), transparent 18rem),\n      radial-gradient(circle at 8% 82%, rgb(15 118 110 / 0.09), transparent 16rem);\n  }\n  .auth-form-content { position: relative; z-index: 1; }\n  .auth-login-form .auth-control {\n    display: flex;\n    min-height: 3.5rem;\n    align-items: center;\n    overflow: hidden;\n    border: 2px solid #cbd5e1;\n    border-radius: 1rem;\n    background: #fff;\n    box-shadow: 0 9px 24px rgb(20 33 61 / 0.07);\n    transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;\n  }\n  .auth-login-form .auth-control:hover { border-color: #94a3b8; }\n  .auth-login-form .auth-control:focus-within {\n    border-color: #ea580c;\n    box-shadow: 0 0 0 4px rgb(249 115 2…"
+          },
+          "screenshotPath": "C:\\laragon\\www\\Website_Bimbelku Upgrade\\.sokudo\\e2e\\6c7b778c-32c1-4239-b0fd-2d1dcdf7ad5d\\login-invalid-credentials\\step-2-fail.png"
+        },
+        {
+          "index": 3,
+          "label": "inputText \"invalid@example.test\"",
+          "sourceLine": 8,
+          "status": "skipped",
+          "workedMs": 0
+        },
+        {
+          "index": 4,
+          "label": "tapOn \"#login-password\"",
+          "sourceLine": 9,
+          "status": "skipped",
+          "workedMs": 0
+        },
+        {
+          "index": 5,
+          "label": "inputText \"wrongpass123\"",
+          "sourceLine": 10,
+          "status": "skipped",
+          "workedMs": 0
+        },
+        {
+          "index": 6,
+          "label": "tapOn \"button[type='submit']\"",
+          "sourceLine": 11,
+          "status": "skipped",
+          "workedMs": 0
+        },
+        {
+          "index": 7,
+          "label": "assertVisible \"Periksa email dan kata sandi, lalu coba lagi.\"",
+          "sourceLine": 12,
+          "status": "skipped",
+          "workedMs": 0
+        }
+      ],
+      "startedMs": 1790997626346,
+      "endedMs": 1790997643723
+    }
+  ],
+  "startedMs": 1790997626343,
+  "endedMs": 1790997643726
+}

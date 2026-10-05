@@ -18,6 +18,21 @@ use InvalidArgumentException;
 
 class FinancialLedgerService
 {
+    public function recordLateGatewayPaymentReceived(Order $order): FinancialJournal
+    {
+        $amount = round((float) ($order->gateway_expected_amount ?? $order->external_received_amount), 2);
+
+        return $this->record(
+            "order:{$order->id}:late_gateway_receipt",
+            'payment_received', Order::class, $order->id,
+            "Dana tagihan {$order->order_id} diterima setelah pembatalan/kedaluwarsa",
+            [
+                ['account' => 'platform_cash', 'side' => 'debit', 'amount' => $amount],
+                ['account' => 'customer_funds', 'side' => 'credit', 'amount' => $amount],
+            ]
+        );
+    }
+
     public function recordPaymentReceived(Order $order): FinancialJournal
     {
         $total = round((float) $order->amount, 2);
@@ -229,7 +244,7 @@ class FinancialLedgerService
         $normalizedEntries = [];
         foreach ($entries as $entry) {
             $cents = (int) round((float) $entry['amount'] * 100);
-            if ($cents < 0 || !in_array($entry['side'], ['debit', 'credit'], true)) {
+            if ($cents < 0 || ! in_array($entry['side'], ['debit', 'credit'], true)) {
                 throw new InvalidArgumentException('Baris jurnal keuangan tidak valid.');
             }
             if ($entry['side'] === 'debit') {

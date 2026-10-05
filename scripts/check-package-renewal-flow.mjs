@@ -30,9 +30,9 @@ add("builder no longer hardcodes a 96 hour date minimum", !builder.includes("Dat
 add("renewal chain cannot branch from the same source package", controller.includes("hasBlockingRenewal") && controller.includes("sudah memiliki paket lanjutan") && test.includes("assertJsonPath('can_renew', false)"));
 add("renewed chapter progress starts fresh", controller.includes("'status' => 'not_started'") && controller.includes("'started_at' => null") && controller.includes("'completed_at' => null"));
 add("reselected completed chapter is marked as reinforcement", controller.includes("$wasCompletedBefore") && controller.includes("'needs_review' => $wasCompletedBefore"));
-add("renewal builder does not preselect 100 percent completed chapters", builder.includes("curriculum_chapter_ids: allCompleted") && builder.includes("? []"));
-add("renewal builder guides student to choose continuation material", builder.includes("Semua Bab pada paket sebelumnya sudah selesai") && builder.includes("Bab lanjutan"));
-add("renewal builder labels previous material state", builder.includes("Selesai sebelumnya") && builder.includes("Lanjutkan"));
+add("renewal converts previous chapters to editable text before optional reselection", builder.includes('learning_goal: item.learning_goal || item.chapter || ""') && builder.includes('focus_mode: "text"') && builder.includes("curriculum_chapter_ids: []"));
+add("renewal guides student to update learning focus", builder.includes("Perbarui target belajar bila perlu") && builder.includes("<LearningFocusPicker"));
+add("renewal retains previous focus or legacy material description", builder.includes('learning_goal: item.learning_goal || item.chapter || ""'));
 add("same-tutor renewal locks the selected subject", builder.includes("disabled={Boolean(renewalId && renewalSubjectId)}"));
 add("renewal package is visibly labelled in Kelas Saya", packages.includes("Paket lanjutan") && controller.includes("'renewal_of_id'"));
 add("demo setup provides a 100 percent completed source package", command.includes("materi lama 100%") && command.includes("'status' => 'completed'"));

@@ -9,6 +9,6 @@ return [
     'currency' => env('XENDIT_CURRENCY', 'IDR'),
     'success_url' => env('XENDIT_SUCCESS_URL', rtrim((string) env('FRONTEND_URL'), '/').'/payment?gateway=success'),
     'cancel_url' => env('XENDIT_CANCEL_URL', rtrim((string) env('FRONTEND_URL'), '/').'/payment?gateway=cancelled'),
-    'session_ttl_minutes' => (int) env('XENDIT_SESSION_TTL_MINUTES', 60),
+    'session_ttl_minutes' => \App\Support\PaymentWindow::MINUTES,
     'payout_api_version' => env('XENDIT_PAYOUT_API_VERSION', '2025-09-01'),
 ];

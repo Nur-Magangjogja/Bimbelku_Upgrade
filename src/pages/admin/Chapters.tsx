@@ -129,7 +129,7 @@ export default function Chapters() {
     <AdminLayout title="Materi Kurikulum">
       <div className="space-y-6 pb-12">
         <section className="flex flex-col justify-between gap-5 rounded-[2rem] bg-gradient-to-br from-slate-950 to-indigo-950 p-6 text-white sm:p-8 md:flex-row md:items-end">
-          <div><p className="text-xs font-black uppercase tracking-[.2em] text-indigo-200">Katalog pembelajaran</p><h1 className="mt-3 text-2xl font-black sm:text-3xl">Jenjang → tingkat → mapel → bab</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-indigo-100/70">Materi tersedia untuk kelas 1–12 dan keterampilan umum. Submateri tetap opsional.</p></div>
+          <div><p className="text-xs font-black uppercase tracking-[.2em] text-indigo-200">Katalog pembelajaran</p><h1 className="mt-3 text-2xl font-black sm:text-3xl">Jenjang → tingkat → mapel → bab</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-indigo-100/70">Katalog Bab bersifat opsional sebagai referensi kurikulum. Murid menjelaskan target atau materi belajar saat memesan; mapel tanpa katalog Bab tetap dapat dipesan. Pesanan lama yang memakai Bab tetap menyimpan progress-nya.</p></div>
           <Button onClick={() => openForm()} className="rounded-xl bg-orange-500 font-bold hover:bg-orange-600"><Plus size={16} className="mr-2" />Tambah bab</Button>
         </section>
         <div className="relative rounded-2xl border border-slate-100 bg-white p-4"><Search className="absolute left-7 top-7 text-slate-400" size={17} /><Input value={search} onChange={(event) => setSearch(event.target.value)} className="h-11 rounded-xl pl-10" placeholder="Cari mapel, jenjang, kelas, atau bab" /></div>

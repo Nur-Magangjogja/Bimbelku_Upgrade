@@ -177,7 +177,7 @@ export default function Index() {
     <div className="public-site min-h-screen bg-white">
       <SeoHead
         title={`Bimbel Privat SD, SMP & SMA di Yogyakarta | ${settings.brand_name}`}
-        description={settings.brand_description || "Bimbel privat online dan tatap muka untuk SD, SMP, dan SMA di Yogyakarta. Pilih mapel, Bab, jadwal, dan mode belajar sebelum memesan."}
+        description={settings.brand_description || "Bimbel privat online dan tatap muka untuk SD, SMP, dan SMA di Yogyakarta. Pilih mapel, jelaskan target, jadwal, dan mode belajar sebelum memesan."}
         canonicalPath="/"
         image={settings.social_share_image_url || settings.hero_desktop_image_url}
         schemas={seoSchemas}

@@ -300,16 +300,8 @@ class AuthController extends Controller
             return response()->json(['message' => 'Email atau password salah.'], 401);
         }
 
-        $loginPortal = (string) $request->input('login_portal', '');
-        if ($loginPortal === 'admin' && $user->role !== 'admin') {
-            return response()->json(['message' => 'Halaman ini khusus untuk akun administrator.'], 403);
-        }
-        if ($loginPortal === 'user' && $user->role === 'admin') {
-            return response()->json([
-                'message' => 'Akun admin masuk melalui halaman login administrator.',
-                'error_code' => 'admin_portal_required',
-            ], 403);
-        }
+        // All roles use one login. Legacy login_portal is accepted but never
+        // determines account privileges; the stored role and middleware do.
 
         if ($user->email_verification_required_at && !$user->email_verified_at) {
             return response()->json([

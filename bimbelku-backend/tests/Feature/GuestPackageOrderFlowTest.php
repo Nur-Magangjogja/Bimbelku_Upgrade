@@ -179,6 +179,7 @@ class GuestPackageOrderFlowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.participant_count', 1);
         $second = $this->postJson("/api/guest/packages/{$code}/claim")->assertOk();
+        $this->assertTrue(\App\Models\LearningPackage::query()->findOrFail($first->json('data.id'))->payment_due_at->equalTo(now()->addHour()));
 
         $this->assertSame($first->json('data.id'), $second->json('data.id'));
         $this->assertDatabaseCount('learning_packages', 1);

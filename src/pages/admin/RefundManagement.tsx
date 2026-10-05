@@ -31,6 +31,8 @@ type RefundItem = {
   external_funded_amount: number;
   reason: string;
   status: string;
+  needs_action?: boolean;
+  action_label?: string | null;
   destination_method?: "bank_transfer" | "bimbelku_balance" | "xendit_original" | null;
   payment_provider?: string | null;
   gateway_status?: string | null;
@@ -132,6 +134,7 @@ export default function RefundManagement({ embedded = false }: { embedded?: bool
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(needle)));
   }, [data, search, tab]);
+  const pendingActionCount = data?.pending.filter((item) => item.needs_action).length || 0;
 
   useEffect(() => setPage(1), [search, tab]);
   const lastPage = Math.max(1, Math.ceil(filteredRows.length / 25));
@@ -228,7 +231,7 @@ export default function RefundManagement({ embedded = false }: { embedded?: bool
         <section className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-4 border-b border-slate-100 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex rounded-xl bg-slate-100 p-1">
-              <button type="button" onClick={() => setTab("pending")} className={`min-h-10 rounded-lg px-4 text-sm font-black ${tab === "pending" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`}>Perlu diproses ({data?.pending.length || 0})</button>
+              <button type="button" onClick={() => setTab("pending")} className={`flex min-h-10 items-center gap-2 rounded-lg px-4 text-sm font-black ${tab === "pending" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`}>Perlu diproses ({data?.pending.length || 0}){pendingActionCount > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-700" aria-label={`${pendingActionCount} refund perlu tindakan`}><span className="h-2 w-2 rounded-full bg-rose-600" />{pendingActionCount}</span>}</button>
               <button type="button" onClick={() => setTab("history")} className={`min-h-10 rounded-lg px-4 text-sm font-black ${tab === "history" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`}>Riwayat</button>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -244,9 +247,9 @@ export default function RefundManagement({ embedded = false }: { embedded?: bool
           ) : (
             <div className="divide-y divide-slate-100">
               {rows.map((item) => (
-                <article key={item.id} className="grid gap-4 p-4 sm:p-5 xl:grid-cols-[1fr_.9fr_.8fr_auto] xl:items-center">
+                <article key={item.id} className={`grid gap-4 p-4 sm:p-5 xl:grid-cols-[1fr_.9fr_.8fr_auto] xl:items-center ${tab === "pending" && item.needs_action ? "border-l-4 border-l-rose-500 bg-rose-50/30" : ""}`}>
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2"><p className="font-black text-slate-950">{item.student?.name || "Murid"}</p><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-500">{item.order_id || `Refund #${item.id}`}</span></div>
+                    <div className="flex flex-wrap items-center gap-2"><p className="font-black text-slate-950">{item.student?.name || "Murid"}</p><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-500">{item.order_id || `Refund #${item.id}`}</span>{tab === "pending" && item.needs_action && <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-black text-rose-700"><span className="h-2 w-2 rounded-full bg-rose-600" />{item.action_label || "Perlu tindakan"}</span>}</div>
                     <p className="mt-1 truncate text-sm font-semibold text-slate-600">{item.subject || "Pesanan belajar"}</p>
                     <p className="mt-2 text-xs leading-5 text-slate-500">{item.reason}</p>
                   </div>

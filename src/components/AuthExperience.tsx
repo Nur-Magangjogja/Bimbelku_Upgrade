@@ -6,7 +6,7 @@ import { useWebsiteContent } from "@/components/WebsiteContentProvider";
 type AuthExperienceProps = {
   children: ReactNode;
   mode: "login" | "register";
-  role: "student" | "teacher" | "admin" | "all";
+  role: "student" | "teacher" | "all";
 };
 
 const authPanelCss = `
@@ -343,14 +343,11 @@ export default function AuthExperience({ children, mode, role }: AuthExperienceP
   const { settings } = useWebsiteContent();
   const isTeacher = role === "teacher";
   const isUnified = role === "all";
-  const isAdmin = role === "admin";
   const brandName = settings.brand_name || "BimbelKu";
   const logo = settings.logo_dark_url || settings.logo_url;
   const mobileLogo = settings.logo_dark_url || settings.logo_url;
-  const steps = isAdmin
-    ? ["Akses terpisah dari akun pengguna", "Sesi aman tetap aktif di perangkat", "Aktivitas admin tercatat di sistem"]
-    : isUnified
-      ? ["Satu form untuk murid dan tutor", "Sesi aman tetap aktif di perangkat", "Masuk langsung ke dashboard yang sesuai"]
+  const steps = isUnified
+      ? ["Lanjutkan pesanan dan kegiatan belajarmu", "Temukan jadwal dan kelas dalam satu akun", "Sesi aman tetap aktif di perangkat"]
       : isTeacher
       ? ["Lengkapi dan kirim seluruh data", "Lanjutkan seleksi serta tes via WhatsApp", "Akun aktif setelah disetujui admin"]
       : ["Pilih kebutuhan belajar", "Atur pesanan dengan jelas", "Pantau proses di akunmu"];
@@ -365,20 +362,18 @@ export default function AuthExperience({ children, mode, role }: AuthExperienceP
             {logo ? <img src={logo} alt="" loading="eager" decoding="async" className="h-11 object-contain" style={{ maxWidth: 144 }} /> : <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#14213D] text-white"><BookOpenCheck size={24} /></span>}
             {!logo && <span>{brandName}</span>}
           </Link>
-          <span className="rounded-full border border-slate-300 px-3 py-1 text-xs font-bold text-[#14213D]">{isAdmin ? "Ruang admin" : isUnified ? "Murid & tutor" : isTeacher ? "Ruang tutor" : "Ruang belajar"}</span>
+          <span className="rounded-full border border-slate-300 px-3 py-1 text-xs font-bold text-[#14213D]">{isUnified ? "Ruang belajar" : isTeacher ? "Ruang tutor" : "Ruang belajar"}</span>
         </div>
 
         <div className="relative z-10 w-full max-w-md" style={{ marginBlock: "auto", paddingRight: "2rem" }}>
           <div>
-            <p className="inline-flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-teal-800"><Sparkles size={16} /> {isAdmin ? "Pusat operasional BimbelKu" : isUnified ? "Satu pintu BimbelKu" : isTeacher ? "Tumbuh bersama BimbelKu" : "Belajar bersama BimbelKu"}</p>
+            <p className="inline-flex items-center gap-2 text-xs font-extrabold uppercase tracking-widest text-teal-800"><Sparkles size={16} /> {isUnified ? "Belajar bersama BimbelKu" : isTeacher ? "Tumbuh bersama BimbelKu" : "Belajar bersama BimbelKu"}</p>
             <h1 className="mt-4 text-5xl font-black leading-tight tracking-tight">
-              {isAdmin ? <>Kelola layanan. <span className="text-teal-800">Jaga setiap proses.</span></> : isUnified ? <>Masuk sekali. <span className="text-teal-800">Lanjut sesuai peran.</span></> : isTeacher ? <>Bantu siswa maju. <span className="text-teal-800">Mulai dari sini.</span></> : <>Setiap langkah belajar <span className="text-teal-800">punya arah.</span></>}
+              {isUnified ? <>Selamat datang kembali. <span className="text-teal-800">Lanjutkan langkah belajarmu.</span></> : isTeacher ? <>Bantu siswa maju. <span className="text-teal-800">Mulai dari sini.</span></> : <>Setiap langkah belajar <span className="text-teal-800">punya arah.</span></>}
             </h1>
             <p className="mt-4 max-w-md text-sm leading-6 text-slate-800 sm:text-base sm:leading-7">
-              {isAdmin
-                ? "Akses admin dipisahkan dari login pengguna agar jalur operasional lebih jelas dan terkontrol."
-                : isUnified
-                  ? "Murid dan tutor memakai halaman masuk yang sama. Sistem mengenali peran akun dan membuka ruang kerja yang tepat."
+              {isUnified
+                  ? "Kembali ke kegiatan belajar dan mengajar dengan lebih mudah. Jadwal, pesanan, dan perkembangan kelas tersimpan di akunmu."
                 : isTeacher
                   ? "Lengkapi seluruh data terlebih dahulu, lalu lanjutkan proses seleksi dan tes melalui WhatsApp."
                   : "Temukan bimbingan yang sesuai, susun kebutuhanmu, dan lanjutkan prosesnya dengan tenang dalam satu akun."}
@@ -400,13 +395,13 @@ export default function AuthExperience({ children, mode, role }: AuthExperienceP
               {mobileLogo ? <img src={mobileLogo} alt="" loading="eager" decoding="async" className="h-10 object-contain" style={{ maxWidth: 144 }} /> : <span className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-500 text-white"><BookOpenCheck size={24} /></span>}
               {!mobileLogo && <span>{brandName}</span>}
             </Link>
-            <span className="rounded-full border border-slate-200 px-3 py-1 text-xs font-bold text-orange-700">{isAdmin ? "Admin" : isUnified ? "Murid & tutor" : isTeacher ? "Tutor" : "Murid"}</span>
+            <span className="rounded-full border border-slate-200 px-3 py-1 text-xs font-bold text-orange-700">{isUnified ? "Ruang belajar" : isTeacher ? "Tutor" : "Murid"}</span>
           </div>
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
             <Link to="/" className="inline-flex min-h-11 items-center gap-2 rounded-xl text-sm font-bold text-slate-500 hover:text-orange-700"><ArrowLeft size={17} /> Kembali ke beranda</Link>
 
           </div>
-          <div className="mb-6 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-orange-700"><GraduationCap size={17} /> {isAdmin ? "Login administrator" : isUnified ? "Login murid & tutor" : isTeacher ? "Pendaftaran tutor" : "Akun murid"} <span className="h-px flex-1 bg-orange-200" /></div>
+          <div className="mb-6 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-orange-700"><GraduationCap size={17} /> {isUnified ? "Akun BimbelKu" : isTeacher ? "Pendaftaran tutor" : "Akun murid"} <span className="h-px flex-1 bg-orange-200" /></div>
           {children}
           <p className="mt-10 border-t border-slate-200 pt-5 text-center text-xs leading-5 text-slate-500">Ingin tahu alurnya? <Link to="/cara-belajar" className="font-bold text-orange-700 hover:underline">Lihat cara belajar di BimbelKu</Link></p>
         </div>

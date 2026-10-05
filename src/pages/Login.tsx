@@ -7,7 +7,7 @@ import GoogleAuthButton from "@/components/GoogleAuthButton";
 import AuthExperience from "@/components/AuthExperience";
 import { storeBrowserSession } from "@/lib/session";
 
-export default function Login({ adminOnly = false }: { adminOnly?: boolean }) {
+export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -34,7 +34,6 @@ export default function Login({ adminOnly = false }: { adminOnly?: boolean }) {
       const response = await axiosModule.default.post(`${API_BASE_URL}/login`, {
         ...formData,
         remember_device: rememberDevice,
-        login_portal: adminOnly ? "admin" : "user",
       }, { withCredentials: true });
       const { access_token, user } = response.data;
       const dashboardByRole: Record<string, string> = { admin: "/admin", teacher: "/guru", student: "/student/dashboard" };
@@ -75,11 +74,11 @@ export default function Login({ adminOnly = false }: { adminOnly?: boolean }) {
     } finally { setIsLoading(false); }
   };
 
-  return <AuthExperience mode="login" role={adminOnly ? "admin" : "all"}>
+  return <AuthExperience mode="login" role="all">
       <section>
-        <p className="mt-8 text-xs font-extrabold uppercase tracking-wider text-orange-700">{adminOnly ? "Akses pengelola" : "Satu pintu akun"}</p>
-        <h2 className="mt-2 text-3xl font-extrabold text-[#14213D]">{adminOnly ? "Masuk sebagai admin" : "Masuk ke BimbelKu"}</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-500">{adminOnly ? "Halaman khusus administrator BimbelKu. Akun murid dan tutor masuk melalui halaman login umum." : "Murid dan tutor masuk dari form yang sama. Sistem akan mengarahkan akun ke dashboard yang sesuai."}</p>
+        <p className="mt-8 text-xs font-extrabold uppercase tracking-wider text-orange-700">Selamat datang kembali</p>
+        <h2 className="mt-2 text-3xl font-extrabold text-[#14213D]">Masuk ke BimbelKu</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-500">Lanjutkan belajar, lihat jadwal, dan kelola kelasmu dalam satu akun.</p>
         {googleError && <p role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{googleError}</p>}
         {summaryError && <p role="alert" aria-live="assertive" className="mt-5 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{summaryError}</p>}
         <form onSubmit={handleLogin} className="auth-login-form mt-7 space-y-5">
@@ -87,16 +86,12 @@ export default function Login({ adminOnly = false }: { adminOnly?: boolean }) {
           <label htmlFor="login-password" className="block text-sm font-bold text-slate-700">Kata sandi<div className="auth-control mt-2" data-invalid={Boolean(errors.password)}><span className="auth-control-icon" aria-hidden="true"><Lock size={19} /></span><input id="login-password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" required aria-invalid={Boolean(errors.password)} aria-describedby={errors.password ? "login-password-error" : undefined} value={formData.password} onChange={(event) => { setFormData((value) => ({ ...value, password: event.target.value })); setErrors((value) => ({ ...value, password: "" })); }} placeholder="Masukkan kata sandi" /><button type="button" onClick={() => setShowPassword((value) => !value)} className="auth-control-action" aria-controls="login-password" aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div>{errors.password && <span id="login-password-error" className="mt-1 block text-xs font-semibold text-red-700">{errors.password}</span>}</label>
           <div className="flex flex-wrap items-center justify-between gap-3"><label className="inline-flex cursor-pointer items-center gap-2 text-sm font-bold text-slate-600"><input type="checkbox" checked={rememberDevice} onChange={(event) => setRememberDevice(event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500" /><span>Ingat perangkat ini selama 30 hari</span></label><Link to="/forgot-password" className="text-sm font-bold text-orange-700">Lupa kata sandi?</Link></div>
           <button disabled={isLoading} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#14213D] px-5 text-sm font-extrabold text-white hover:bg-slate-800 disabled:opacity-50">{isLoading ? <Loader2 className="animate-spin" size={18} /> : <ArrowRight size={18} />}{isLoading ? "Memproses…" : "Masuk"}</button>
-          {!adminOnly && <><div className="flex items-center gap-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-400"><span className="h-px flex-1 bg-slate-200" />atau<span className="h-px flex-1 bg-slate-200" /></div><GoogleAuthButton redirect={requestedRedirect} rememberDevice={rememberDevice} /></>}
+          <div className="flex items-center gap-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-400"><span className="h-px flex-1 bg-slate-200" />atau<span className="h-px flex-1 bg-slate-200" /></div><GoogleAuthButton redirect={requestedRedirect} rememberDevice={rememberDevice} />
         </form>
-        {adminOnly ? (
-          <p className="mt-7 text-center text-sm text-slate-500">Bukan administrator? <Link to="/login" className="font-extrabold text-orange-700">Masuk sebagai murid atau tutor</Link></p>
-        ) : (
           <>
             <p className="mt-7 text-center text-sm text-slate-500">Belum punya akun untuk belajar? <Link to={registerHref} state={guestEmail ? { email: guestEmail } : undefined} className="font-extrabold text-orange-700">Daftar murid</Link></p>
             <p className="mt-3 text-center text-sm text-slate-500">Ingin mengajar? <Link to="/jadi-tutor" className="font-extrabold text-teal-700">Daftar sebagai tutor</Link></p>
           </>
-        )}
       </section>
   </AuthExperience>;
 }

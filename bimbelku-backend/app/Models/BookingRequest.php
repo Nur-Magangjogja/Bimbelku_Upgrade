@@ -41,6 +41,27 @@ class BookingRequest extends Model
         return $query;
     }
 
+    public function scopeMatchingNeedsAttention(Builder $query): Builder
+    {
+        return $query->where(function (Builder $attention) {
+            $attention
+                ->where(function (Builder $unresolved) {
+                    $unresolved->whereIn('status', ['no_teacher', 'expired'])
+                        ->whereDate('scheduled_date', '>=', today());
+                })
+                ->orWhere(function (Builder $pending) {
+                    $pending->where('status', 'teacher_pending')
+                        ->whereNotNull('teacher_response_deadline')
+                        ->where('teacher_response_deadline', '<=', now());
+                })
+                ->orWhere(function (Builder $expiring) {
+                    $expiring->whereIn('status', ['matching', 'teacher_pending'])
+                        ->whereNotNull('search_expires_at')
+                        ->whereBetween('search_expires_at', [now(), now()->addHours(6)]);
+                });
+        });
+    }
+
     public function student()
     {
         return $this->belongsTo(User::class, 'student_id');

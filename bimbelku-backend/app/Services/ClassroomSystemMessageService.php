@@ -40,7 +40,7 @@ class ClassroomSystemMessageService
         $request = $booking->bookingRequest
             ?? $booking->participants->first()?->bookingRequest;
         $subject = $request?->subject_name ?: 'Bimbingan belajar';
-        $topic = $request?->chapter;
+        $topic = $request?->chapter ?: $request?->learning_goal;
         $studentNames = $booking->participants
             ->filter(fn ($participant) => $participant->order?->status === 'paid')
             ->pluck('student.name')
@@ -56,6 +56,7 @@ class ClassroomSystemMessageService
             'order_code' => $order->order_id,
             'subject' => $subject,
             'topic' => $topic,
+            'learning_goal' => $request?->learning_goal,
             'education_level' => $request?->education_level,
             'grade' => $request?->grade,
             'teacher_name' => $booking->teacher->name,

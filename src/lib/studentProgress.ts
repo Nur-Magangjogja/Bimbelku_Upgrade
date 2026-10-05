@@ -118,7 +118,9 @@ export const packageChapterStats = (item: StudentPackageProgress) => {
     total,
     completed,
     inProgress,
-    percent: total > 0 ? Math.round((completed / total) * 100) : 0,
+    tracksChapters: total > 0,
+    percent: total > 0 ? Math.round((completed / total) * 100)
+      : item.total_sessions > 0 ? Math.max(0, Math.min(100, Math.round((item.used_sessions / item.total_sessions) * 100))) : 0,
   };
 };
 

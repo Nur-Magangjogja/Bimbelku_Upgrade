@@ -8,6 +8,7 @@ const expect = (condition, message) => {
 const routes = read("bimbelku-backend/routes/api.php");
 const controller = read("bimbelku-backend/app/Http/Controllers/Api/XenditPaymentController.php");
 const service = read("bimbelku-backend/app/Services/XenditPaymentService.php");
+const settlement = read("bimbelku-backend/app/Services/GatewayPaymentSettlementService.php");
 const moneyService = read("bimbelku-backend/app/Services/XenditMoneyMovementService.php");
 const webhookService = read("bimbelku-backend/app/Services/XenditWebhookService.php");
 const admin = read("bimbelku-backend/app/Http/Controllers/Api/AdminController.php");
@@ -20,7 +21,7 @@ expect(routes.includes("/xendit-session"), "checkout murid tersedia");
 expect(controller.includes("x-callback-token") && controller.includes("hash_equals"), "token webhook diverifikasi timing-safe");
 expect(controller.includes("PaymentGatewayEvent::firstOrCreate"), "webhook diproses idempoten");
 expect(service.includes("/sessions") && service.includes("PAYMENT_LINK"), "Payment Sessions hosted checkout digunakan");
-expect(controller.includes("gateway_payment_request_id"), "Payment Request ID disimpan untuk refund");
+expect(controller.includes("app(GatewayPaymentSettlementService::class)->settle") && settlement.includes("gateway_payment_request_id"), "Payment Request ID disimpan oleh settlement bersama untuk refund");
 expect(moneyService.includes("/refunds") && moneyService.includes("payment_request_id"), "refund dikirim ke metode pembayaran asal melalui Xendit");
 expect(moneyService.includes("/v3/payouts") && env.includes("MONEY-OUT"), "payout tutor memakai Xendit Payout v3 dan izin MONEY-OUT didokumentasikan");
 expect(webhookService.includes("refund.succeeded") && webhookService.includes("v3_payout.succeeded"), "webhook refund dan payout mengubah status final");

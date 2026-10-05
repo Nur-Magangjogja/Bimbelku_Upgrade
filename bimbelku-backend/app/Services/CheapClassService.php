@@ -71,6 +71,7 @@ class CheapClassService
 
             $template = CheapClassTemplate::create([
                 ...$data,
+                'payment_window_minutes' => \App\Support\PaymentWindow::MINUTES,
                 'teacher_id' => null,
                 'recurrence_enabled' => $recurrenceEnabled,
                 'recurrence_anchor_at' => $recurrenceEnabled ? $registrationOpensAt : null,
@@ -141,7 +142,7 @@ class CheapClassService
             'custom_price_per_student' => $template->custom_price_per_student,
             'minimum_participants' => $template->minimum_participants,
             'maximum_participants' => $template->maximum_participants,
-            'payment_window_minutes' => $template->payment_window_minutes,
+            'payment_window_minutes' => \App\Support\PaymentWindow::MINUTES,
             'status' => 'waiting_teacher',
         ]);
 
@@ -640,7 +641,7 @@ class CheapClassService
                 'Kuota Kelas Kelompok sudah penuh.'
             );
 
-            $seatExpiresAt = now()->addMinutes((int) $class->payment_window_minutes)
+            $seatExpiresAt = now()->addMinutes(\App\Support\PaymentWindow::MINUTES)
                 ->min($class->registration_deadline);
             abort_if($seatExpiresAt->lte(now()), 422, 'Waktu pembayaran tidak lagi tersedia untuk kelas ini.');
 

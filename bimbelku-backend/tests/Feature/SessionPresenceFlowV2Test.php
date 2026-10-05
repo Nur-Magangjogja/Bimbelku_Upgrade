@@ -7,6 +7,7 @@ use App\Models\BookingParticipant;
 use App\Models\BookingRequest;
 use App\Models\Order;
 use App\Models\LearningPackage;
+use App\Models\LearningProgram;
 use App\Models\PackageChapter;
 use App\Models\PackagePlan;
 use App\Models\PackageSession;
@@ -151,6 +152,81 @@ class SessionPresenceFlowV2Test extends TestCase
 
         $this->assertSame('completed', $topic->fresh()->status);
         $this->assertSame('completed', $booking->fresh()->status);
+    }
+
+    public function test_program_session_without_chapters_can_finish_and_release_tutor_earnings(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-20 10:00:00', 'Asia/Jakarta'));
+        [$student, $teacher, $booking] = $this->makePresenceBooking();
+        $topic = $this->attachSingleChapterPackage($student, $teacher, $booking);
+        $subject = $topic->subject;
+        $package = $subject->package;
+        $program = LearningProgram::create([
+            'name' => 'Persiapan TKA', 'slug' => 'test-tka',
+            'education_level' => 'SMP', 'is_active' => true,
+        ]);
+        $package->update(['learning_program_id' => $program->id]);
+        $subject->update(['chapter' => 'Persiapan TKA', 'curriculum_chapter_ids' => []]);
+        $topic->delete();
+
+        Sanctum::actingAs($teacher);
+        $this->postJson("/api/teacher/bookings/{$booking->id}/ready", [
+            'focus_note' => 'Latihan soal penalaran matematika TKA.',
+        ])->assertOk();
+        Sanctum::actingAs($student);
+        $this->postJson("/api/student/bookings/{$booking->id}/presence-confirm")->assertOk();
+
+        Carbon::setTestNow(Carbon::parse('2026-08-20 10:50:00', 'Asia/Jakarta'));
+        Sanctum::actingAs($teacher);
+        $this->postJson("/api/teacher/bookings/{$booking->id}/check-out")->assertOk();
+        $this->getJson("/api/bookings/{$booking->id}/learning-session")
+            ->assertOk()->assertJsonCount(0, 'learning_chapters')
+            ->assertJsonPath('permissions.can_report_progress', true);
+        $payload = [
+            'material_covered' => 'Latihan penalaran matematika TKA.',
+            'mastered_skills' => 'Murid memahami strategi membaca soal penalaran.',
+            'next_exercise' => 'Latihan soal penalaran lanjutan.',
+            'chapter_updates' => [], 'progress_percent' => 60,
+            'no_material_change' => false,
+        ];
+        $this->postJson("/api/teacher/bookings/{$booking->id}/progress-reports", $payload)
+            ->assertCreated()->assertJsonPath('data.progress_percent', 60)
+            ->assertJsonPath('data.no_material_change', false);
+        $this->assertSame('awaiting_student_approval', $booking->fresh()->status);
+        $this->assertSame('locked', $booking->fresh()->payout_status);
+        $this->assertDatabaseCount('package_session_chapter_logs', 0);
+        $this->postJson("/api/teacher/bookings/{$booking->id}/progress-reports", $payload)
+            ->assertUnprocessable();
+
+        Sanctum::actingAs($student);
+        $this->postJson("/api/student/bookings/{$booking->id}/approve")->assertOk();
+        $this->assertSame('completed', $booking->fresh()->status);
+        $this->assertSame('ready', $booking->fresh()->payout_status);
+        $this->assertEquals(40000, $booking->fresh()->teacher_net_amount);
+        $this->assertSame('completed', $subject->fresh()->status);
+        $this->assertSame('completed', $package->fresh()->status);
+        $this->assertSame(1, $package->fresh()->used_sessions);
+    }
+
+    public function test_regular_package_with_missing_chapters_remains_blocked(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-20 10:00:00', 'Asia/Jakarta'));
+        [$student, $teacher, $booking] = $this->makePresenceBooking();
+        $this->attachSingleChapterPackage($student, $teacher, $booking)->delete();
+        Sanctum::actingAs($teacher);
+        $this->postJson("/api/teacher/bookings/{$booking->id}/ready")->assertOk();
+        Sanctum::actingAs($student);
+        $this->postJson("/api/student/bookings/{$booking->id}/presence-confirm")->assertOk();
+        Carbon::setTestNow(Carbon::parse('2026-08-20 10:50:00', 'Asia/Jakarta'));
+        Sanctum::actingAs($teacher);
+        $this->postJson("/api/teacher/bookings/{$booking->id}/check-out")->assertOk();
+        $this->postJson("/api/teacher/bookings/{$booking->id}/progress-reports", [
+            'material_covered' => 'Latihan matematika.', 'mastered_skills' => 'Memahami pecahan.',
+            'next_exercise' => 'Latihan lanjutan.', 'progress_percent' => 100,
+        ])->assertUnprocessable()->assertJsonPath('message', 'Katalog Bab paket tidak tersedia. Hubungi admin.');
+        $this->assertSame('in_progress', $booking->fresh()->status);
+        $this->assertSame('locked', $booking->fresh()->payout_status);
+        $this->assertDatabaseCount('learning_progress_reports', 0);
     }
 
     private function makePresenceBooking(): array

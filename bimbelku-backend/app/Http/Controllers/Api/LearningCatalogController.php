@@ -27,7 +27,7 @@ class LearningCatalogController extends Controller
                 ->orderBy('name')
                 ->get([
                     'id', 'name', 'group_name', 'education_levels', 'grades',
-                    'is_elective', 'curriculum_name', 'edition',
+                    'is_elective', 'curriculum_name', 'edition', 'show_chapter_selection',
                 ]);
 
             $subjects = $catalogSubjects

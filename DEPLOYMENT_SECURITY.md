@@ -29,6 +29,17 @@ Kode aplikasi mengurangi risiko serangan, tetapi keamanan production tetap berga
 
 ## Operasional
 
+### Pemeriksaan pembayaran otomatis
+
+- Scheduler Laravel wajib berjalan setiap menit. `payments:reconcile` memeriksa checkout dari server walaupun browser murid ditutup; `refunds:reconcile` melanjutkan refund yang belum selesai.
+- Di lokal, jalankan `php artisan schedule:work` dari folder `bimbelku-backend` bila ingin menguji pemeriksaan berkala. Perintah ini dapat memproses transaksi yang sudah ada; gunakan akun/gateway sandbox saja.
+- Di hosting, pasang cron `php artisan schedule:run` setiap menit dengan working directory backend. Gunakan cache bersama yang mendukung lock (database/Redis), bukan cache `array`, untuk mencegah checkout, pembatalan, dan webhook memproses tagihan bersamaan.
+- Pembayaran yang diterima setelah pesanan kedaluwarsa/dibatalkan tidak mengaktifkan kelas kembali. Dana dicatat sesuai nominal nyata dan refund ke metode asal dimulai otomatis. Saldo yang telah dilepas tidak dikembalikan dua kali.
+- Pembuatan checkout mengirim satu POST saja. Bila respons timeout/5xx/429/409 atau tidak lengkap tanpa ID sesi, `gateway_creation_uncertain` menahan pengiriman ulang dan mempertahankan referensi. Jangan menghapus flag ini hanya agar tombol bayar aktif; pastikan status di penyedia pembayaran terlebih dahulu. Webhook bertoken valid dengan referensi yang cocok dapat memulihkan ID sesi yang responsnya hilang. Penolakan validasi/autentikasi yang pasti boleh dicoba kembali; checkout ber-ID dimuat ulang dengan GET, bukan dibuat ulang.
+- Status penerimaan dana berhasil tidak boleh diturunkan oleh notifikasi kedaluwarsa/gagal yang datang terlambat. Identitas sesi, referensi, dan metadata order yang dikirim bersamaan harus cocok. Webhook tanpa identitas atau beridentitas konflik dicatat sebagai diabaikan dan tidak mengubah transaksi pertama. Pemeriksaan identitas juga diterapkan pada refund dan payout.
+- Pemeriksaan cadangan mencakup tagihan terbuka dan tagihan yang baru ditutup dalam tujuh hari, maksimal 20 per putaran dengan batas waktu kerja. Webhook tetap menerima pembayaran terlambat untuk tagihan lama. Pantau kegagalan command dan log gateway; periksa `php artisan schedule:list` setelah deployment.
+- Checkout baru menambahkan `order_id` ke alamat kembali berhasil, batal, dan checkout di dalam halaman. Frontend hanya membuka tagihan milik akun yang cocok dengan ID tersebut, termasuk jika sudah dibayar atau kedaluwarsa; status tetap diverifikasi dari server, bukan dari `gateway=success`. ID salah/tidak dapat diakses tidak dialihkan diam-diam ke tagihan terbaru. Checkout lama yang telanjur dibuat dengan URL tanpa ID tetap harus diperiksa dari Riwayat Transaksi; URL yang tersimpan di penyedia tidak berubah otomatis. Pesan kedaluwarsa mengikuti berakhirnya deadline tagihan, bukan teks lama “48 jam”.
+
 - Jalankan `npm audit --omit=dev` dan `composer audit --locked` pada setiap rilis.
 - Backup database otomatis di lokasi privat dan uji pemulihannya. Jangan simpan dump di web root.
 - Pantau perubahan file, login admin, lonjakan 404/POST, serta file PHP baru. Gunakan alert dari hosting/Cloudflare atau file-integrity monitor.

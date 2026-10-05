@@ -8,6 +8,7 @@ use App\Models\Notification;
 use App\Models\Setting;
 use App\Models\TeacherOffer;
 use App\Services\PackageCheckoutService;
+use App\Services\PackageEarningsAllocation;
 use App\Services\TeacherMatchingService;
 use App\Services\TeacherReplacementService;
 use App\Support\TeacherReplacementState;
@@ -17,7 +18,7 @@ use Illuminate\Validation\Rule;
 
 class TeacherOfferController extends Controller
 {
-    public function index(Request $request, TeacherMatchingService $matchingService)
+    public function index(Request $request, TeacherMatchingService $matchingService, PackageEarningsAllocation $earningsAllocation)
     {
         $matchingService->expireStaleOffersForTeacher($request->user()->id);
         $validated = $request->validate([
@@ -45,7 +46,7 @@ class TeacherOfferController extends Controller
             min(100, (float) (Setting::where('key', 'admin_fee')->value('value') ?? 20))
         );
 
-        $offers->getCollection()->transform(function (TeacherOffer $offer) use ($commissionPercent) {
+        $offers->getCollection()->transform(function (TeacherOffer $offer) use ($commissionPercent, $earningsAllocation) {
             $request = $offer->bookingRequest;
             $effectiveCommission = (float) (
                 $request?->booking?->commission_percent
@@ -63,16 +64,31 @@ class TeacherOfferController extends Controller
                 ], true);
 
             if ($request) {
-                $perStudentAmount = (float) $request->total_amount;
-                $request->setAttribute('participant_count', (int) ($request->packageSubject?->package?->participant_count ?? 1));
+                $participantCount = (int) ($request->packageSubject?->package?->participant_count ?? 1);
+                $offerGross = (float) $request->total_amount;
+                $offerNet = round($offerGross * (100 - $effectiveCommission) / 100, 2);
+                if ($request->packageSubject && ! $request->teacher_replacement_request_id) {
+                    $allocation = $earningsAllocation->forPackage($request->packageSubject->package);
+                    $subjectAmount = $allocation[$request->packageSubject->id] ?? null;
+                    if ($subjectAmount) {
+                        $offerGross = $subjectAmount['gross_amount'];
+                        $offerNet = $subjectAmount['teacher_net_amount'];
+                        $effectiveCommission = 100 - PackageEarningsAllocation::TEACHER_SHARE_PERCENT;
+                        $request->setAttribute('total_amount', $offerGross);
+                        $subjectHours = max(1, (int) $request->packageSubject->allocated_sessions
+                            * (int) $request->packageSubject->package->duration_hours);
+                        $request->setAttribute('hourly_rate', round($offerGross / $subjectHours, 2));
+                    }
+                }
+                $request->setAttribute('participant_count', $participantCount);
                 $request->setAttribute('source_label', $request->teacher_replacement_request_id ? 'Guru Pengganti · Paket Belajar' : 'Paket Belajar');
                 $request->setAttribute('commission_percent', $effectiveCommission);
-                $request->setAttribute('amount_per_student', $perStudentAmount);
-                $request->setAttribute('gross_amount_minimum', $perStudentAmount);
-                $request->setAttribute('gross_amount_if_all_pay', $perStudentAmount);
+                $request->setAttribute('amount_per_student', $offerGross / max(1, $participantCount));
+                $request->setAttribute('gross_amount_minimum', $offerGross);
+                $request->setAttribute('gross_amount_if_all_pay', $offerGross);
                 $request->setAttribute(
                     'estimated_net_amount',
-                    round($perStudentAmount * (100 - $effectiveCommission) / 100)
+                    $offerNet
                 );
                 if ($request->student && ! $canSeeFullAddress) {
                     $request->student->setAttribute('name', 'Murid BimbelKu');

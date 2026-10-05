@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import http, { getApiError } from "@/lib/http";
+import { filterAdminSubjects, type AdminSubjectFilters } from "@/lib/adminSubjectFilters";
 import {
   EDUCATION_LEVELS,
   GRADES_BY_EDUCATION_LEVEL,
@@ -24,6 +25,7 @@ interface Subject {
   grades: string[];
   is_elective: boolean;
   is_active: boolean;
+  show_chapter_selection?: boolean;
   curriculum_name?: string;
   edition?: string | null;
   source_url?: string | null;
@@ -44,6 +46,7 @@ const emptyForm = {
   education_levels: ["SD"] as string[],
   is_elective: false,
   is_active: true,
+  show_chapter_selection: true,
 };
 
 export default function SubjectManagement() {
@@ -55,7 +58,9 @@ export default function SubjectManagement() {
   const [newGroupName, setNewGroupName] = useState("");
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [search, setSearch] = useState("");
-  const [showInactive, setShowInactive] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [levelFilter, setLevelFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<AdminSubjectFilters["status"]>("active");
   const [editing, setEditing] = useState<Subject | null | undefined>(undefined);
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(true);
@@ -79,11 +84,16 @@ export default function SubjectManagement() {
 
   useEffect(() => { void load(); }, []);
 
-  const filtered = useMemo(() => subjects.filter((subject) => {
-    if (!showInactive && !subject.is_active) return false;
-    const haystack = `${subject.name} ${subject.group_name} ${subject.education_levels.join(" ")}`.toLocaleLowerCase("id-ID");
-    return haystack.includes(search.toLocaleLowerCase("id-ID"));
-  }), [search, showInactive, subjects]);
+  const filtered = useMemo(() => filterAdminSubjects(subjects, {
+    search, category: categoryFilter, level: levelFilter, status: statusFilter,
+  }), [search, categoryFilter, levelFilter, statusFilter, subjects]);
+  const filtersChanged = Boolean(search || categoryFilter || levelFilter || statusFilter !== "active");
+  const resetFilters = () => {
+    setSearch("");
+    setCategoryFilter("");
+    setLevelFilter("");
+    setStatusFilter("active");
+  };
   const groupOptions = useMemo(() => [...new Set([
     ...groups.map((group) => group.name),
     ...subjects.map((subject) => subject.group_name?.trim()).filter((group): group is string => Boolean(group)),
@@ -112,6 +122,7 @@ export default function SubjectManagement() {
         ? current.map((group) => group.id === editingGroup.id ? response.data.data : group)
         : [...current, response.data.data]);
       if (editingGroup) {
+        setCategoryFilter((current) => current === editingGroup.name ? response.data.data.name : current);
         setSubjects((current) => current.map((subject) => subject.group_name === editingGroup.name
           ? { ...subject, group_name: response.data.data.name }
           : subject));
@@ -137,6 +148,7 @@ export default function SubjectManagement() {
     try {
       const response = await http.delete<{ message: string }>(`/admin/subject-groups/${group.id}`);
       setGroups((current) => current.filter((item) => item.id !== group.id));
+      setCategoryFilter((current) => current === group.name ? "" : current);
       if (editingGroup?.id === group.id) resetGroupForm();
       notify.success(response.data.message);
     } catch (error) {
@@ -152,6 +164,7 @@ export default function SubjectManagement() {
       education_levels: subject.education_levels,
       is_elective: subject.is_elective,
       is_active: subject.is_active,
+      show_chapter_selection: subject.show_chapter_selection !== false,
     } : emptyForm);
   };
 
@@ -252,16 +265,46 @@ export default function SubjectManagement() {
 
         <LearningProgramPanel categories={groups} />
 
-        <section className="grid gap-3 rounded-2xl border border-slate-100 bg-white p-4 sm:grid-cols-[1fr_auto] sm:items-center">
-          <div className="relative"><Search className="absolute left-3 top-3.5 text-slate-400" size={17} /><Input value={search} onChange={(event) => setSearch(event.target.value)} className="h-11 rounded-xl pl-10" placeholder="Cari nama, kelompok, atau jenjang" /></div>
-          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-600"><span>Tampilkan nonaktif</span><Switch checked={showInactive} onCheckedChange={setShowInactive} /></label>
+        <section aria-label="Filter mata pelajaran" className="min-w-0 space-y-4 rounded-2xl border border-slate-100 bg-white p-4">
+          <div>
+            <Label htmlFor="subject-search">Cari mata pelajaran</Label>
+            <div className="relative mt-2"><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3.5 text-slate-400" size={17} /><Input id="subject-search" value={search} onChange={(event) => setSearch(event.target.value)} className="h-11 rounded-xl pl-10" placeholder="Cari nama, kategori, atau jenjang" /></div>
+          </div>
+          <div className="grid min-w-0 gap-3 sm:grid-cols-3">
+            <div className="min-w-0">
+              <Label htmlFor="subject-category-filter">Kategori katalog</Label>
+              <select id="subject-category-filter" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="mt-2 h-11 w-full min-w-0 max-w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <option value="">Semua kategori</option>
+                {groupOptions.map((group) => <option key={group} value={group}>{group}</option>)}
+              </select>
+            </div>
+            <div className="min-w-0">
+              <Label htmlFor="subject-level-filter">Jenjang</Label>
+              <select id="subject-level-filter" value={levelFilter} onChange={(event) => setLevelFilter(event.target.value)} className="mt-2 h-11 w-full min-w-0 max-w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <option value="">Semua jenjang</option>
+                {levels.map((level) => <option key={level} value={level}>{level}</option>)}
+              </select>
+            </div>
+            <div className="min-w-0">
+              <Label htmlFor="subject-status-filter">Status mapel</Label>
+              <select id="subject-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as AdminSubjectFilters["status"])} className="mt-2 h-11 w-full min-w-0 max-w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <option value="active">Aktif</option>
+                <option value="inactive">Nonaktif</option>
+                <option value="all">Semua status</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+            <p aria-live="polite" role="status" className="text-sm text-slate-600">{loading ? "Memuat mata pelajaran…" : `${filtered.length} dari ${subjects.length} mapel ditampilkan`}</p>
+            <Button type="button" variant="outline" disabled={!filtersChanged} onClick={resetFilters} className="min-h-10 rounded-xl">Reset filter</Button>
+          </div>
         </section>
 
         <section className="overflow-hidden rounded-[2rem] border border-slate-100 bg-white">
           {loading ? (
             <div className="grid min-h-64 place-items-center"><Loader2 className="animate-spin text-indigo-600" /></div>
           ) : filtered.length === 0 ? (
-            <div className="py-20 text-center"><BookOpen className="mx-auto h-10 w-10 text-slate-300" /><p className="mt-3 font-black text-slate-700">Mapel tidak ditemukan</p></div>
+            <div className="px-4 py-20 text-center"><BookOpen className="mx-auto h-10 w-10 text-slate-300" /><p className="mt-3 font-black text-slate-700">Mapel tidak ditemukan</p><p className="mt-2 text-sm text-slate-500">Coba ubah pencarian, kategori, jenjang, atau status mapel.</p>{filtersChanged && <Button type="button" variant="outline" onClick={resetFilters} className="mt-4 min-h-10 rounded-xl">Reset filter</Button>}</div>
           ) : (
             <div className="divide-y divide-slate-100">
               {filtered.map((subject) => (
@@ -271,7 +314,7 @@ export default function SubjectManagement() {
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2"><p className="font-black text-slate-900">{subject.name}</p><span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${subject.is_active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{subject.is_active ? "Aktif" : "Nonaktif"}</span>{subject.is_elective && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700">Pilihan</span>}</div>
                       <p className="mt-1 text-sm text-slate-500">{subject.group_name || "Umum"} · {subject.education_levels.join(", ")}</p>
-                      <p className="mt-1 text-xs font-bold text-indigo-600">{subject.chapters_count || 0} bab tersedia</p>
+                      <p className="mt-1 text-xs font-bold text-indigo-600">{subject.chapters_count || 0} bab tersedia · Pilihan bab {subject.show_chapter_selection === false ? "disembunyikan" : "ditampilkan"}</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2 sm:flex">
@@ -342,6 +385,7 @@ export default function SubjectManagement() {
                 })}
               </div>
             </div>
+            <label className="flex items-center justify-between gap-4 rounded-2xl bg-indigo-50 p-4"><span><span className="block text-sm font-black text-slate-800">Tampilkan pilihan bab kepada murid</span><span className="mt-1 block text-xs leading-5 text-slate-600">Jika aktif, murid dapat memilih bab sesuai jenjang dan kelas atau menulis materi sendiri. Jika nonaktif, murid hanya menulis materi. Data bab dan riwayat lama tidak dihapus. Program belajar tetap mengikuti materi program.</span></span><Switch className="shrink-0" checked={form.show_chapter_selection} onCheckedChange={(value) => setForm((current) => ({ ...current, show_chapter_selection: value }))} /></label>
             <label className="flex items-center justify-between gap-4 rounded-2xl bg-slate-50 p-4"><span><span className="block text-sm font-black text-slate-800">Mapel pilihan</span><span className="mt-1 block text-xs text-slate-500">Dapat dipakai untuk mapel pilihan sekolah atau keterampilan umum.</span></span><Switch checked={form.is_elective} onCheckedChange={(value) => setForm((current) => ({ ...current, is_elective: value }))} /></label>
             <Button disabled={saving} className="h-12 w-full rounded-xl bg-indigo-600 font-black hover:bg-indigo-700">{saving ? <Loader2 size={17} className="mr-2 animate-spin" /> : <BookOpen size={17} className="mr-2" />}Simpan mapel</Button>
           </form>

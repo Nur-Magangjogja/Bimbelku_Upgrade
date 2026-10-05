@@ -26,8 +26,7 @@ export default function PrivateRoute({ allowedRoles }: PrivateRouteProps) {
 
   if (!token || !user) {
     const returnTo = `${location.pathname}${location.search}${location.hash}`;
-    const loginPath = allowedRoles?.length === 1 && allowedRoles[0] === "admin" ? "/admin/login" : "/login";
-    return <Navigate to={`${loginPath}?redirect=${encodeURIComponent(returnTo)}`} replace />;
+    return <Navigate to={`/login?redirect=${encodeURIComponent(returnTo)}`} replace />;
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role || "")) {

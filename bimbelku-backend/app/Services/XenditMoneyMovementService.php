@@ -7,6 +7,7 @@ use App\Models\Refund;
 use App\Models\User;
 use App\Support\XenditPayoutChannelCatalog;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -19,7 +20,10 @@ class XenditMoneyMovementService
 
     public function createRefund(Refund $refund): array
     {
-        $refund->loadMissing('order');
+        $refund->refresh()->loadMissing('order');
+        if ($refund->status === 'paid' || $refund->gateway_status === 'SUCCEEDED') {
+            return $this->refundPayload($refund);
+        }
         $breakdown = $refund->tenderBreakdown();
         if ($breakdown['external_funded_amount'] <= 0.009) {
             throw new RuntimeException('Refund ini tidak memiliki bagian pembayaran eksternal.');
@@ -32,14 +36,18 @@ class XenditMoneyMovementService
         }
 
         $reference = $refund->gateway_reference_id ?: 'BKU-RFD-'.$refund->id;
-        $refund->forceFill([
+        $refund = $this->storeRefundResponse($refund, [
             'payment_provider' => 'xendit',
             'destination_method' => 'xendit_original',
             'destination_selected_at' => $refund->destination_selected_at ?: now(),
             'gateway_reference_id' => $reference,
             'gateway_status' => 'SUBMITTING',
             'gateway_failure_code' => null,
-        ])->save();
+        ]);
+        if ($refund->status === 'paid' || $refund->gateway_status === 'SUCCEEDED') {
+            return $this->refundPayload($refund);
+        }
+        $refund->loadMissing('order');
         $response = $this->client()->withHeader('idempotency-key', $reference)->post(config('xendit.base_url').'/refunds', [
             'reference_id' => $reference,
             'payment_request_id' => $refund->order->gateway_payment_request_id,
@@ -49,14 +57,16 @@ class XenditMoneyMovementService
             'metadata' => ['refund_id' => (string) $refund->id, 'order_id' => (string) $refund->order_id],
         ]);
         if (! $response->successful()) {
-            if (in_array($response->status(), [400, 401, 403, 404, 422], true)) {
-                $refund->forceFill(['gateway_status' => 'FAILED'])->save();
+            $refund = $this->storeRefundResponse($refund, in_array($response->status(), [400, 401, 403, 404, 422], true)
+                ? ['gateway_status' => 'FAILED'] : []);
+            if ($refund->status === 'paid' || $refund->gateway_status === 'SUCCEEDED') {
+                return $this->refundPayload($refund);
             }
             report(new RuntimeException('Xendit refund failed: '.$response->status().' '.$response->body()));
             throw new RuntimeException('Refund otomatis belum dapat dibuat. Periksa saldo operasional dan coba kembali.');
         }
         $data = $response->json();
-        $refund->forceFill([
+        $refund = $this->storeRefundResponse($refund, [
             'payment_provider' => 'xendit',
             'destination_method' => 'xendit_original',
             'destination_selected_at' => $refund->destination_selected_at ?: now(),
@@ -64,13 +74,17 @@ class XenditMoneyMovementService
             'gateway_status' => strtoupper((string) ($data['status'] ?? 'PENDING')),
             'gateway_failure_code' => null,
             'gateway_submitted_at' => now(),
-        ])->save();
+        ]);
 
         return $this->refundPayload($refund->fresh());
     }
 
     public function retrieveRefund(Refund $refund): array
     {
+        $refund->refresh();
+        if ($refund->status === 'paid' || $refund->gateway_status === 'SUCCEEDED') {
+            return $this->refundPayload($refund);
+        }
         if (blank($refund->gateway_refund_id)) {
             return $this->createRefund($refund);
         }
@@ -80,14 +94,35 @@ class XenditMoneyMovementService
             throw new RuntimeException('Status refund belum dapat diperiksa.');
         }
         $data = $response->json();
-        $refund->forceFill([
+        $refund = $this->storeRefundResponse($refund, [
             'gateway_status' => strtoupper((string) ($data['status'] ?? $refund->gateway_status ?? 'PENDING')),
             'gateway_failure_code' => $data['failure_code'] ?? null,
             'gateway_submitted_at' => $refund->gateway_submitted_at ?: now(),
             'last_reconciled_at' => now(),
-        ])->save();
+        ]);
 
         return $this->refundPayload($refund->fresh());
+    }
+
+    /** Apply a remote response against current state, not a pre-request model. */
+    private function storeRefundResponse(Refund $refund, array $updates): Refund
+    {
+        return DB::transaction(function () use ($refund, $updates) {
+            $current = Refund::query()->lockForUpdate()->findOrFail($refund->id);
+            if ($current->status === 'paid' || $current->gateway_status === 'SUCCEEDED') {
+                // A webhook may settle the refund while the HTTP request runs.
+                // Never undo its success, identifiers, or cleared failure code.
+                return $current;
+            }
+            if (filled($refund->gateway_refund_id) && $current->gateway_refund_id !== $refund->gateway_refund_id) {
+                return $current;
+            }
+            if ($updates !== []) {
+                $current->forceFill($updates)->save();
+            }
+
+            return $current->fresh();
+        }, 3);
     }
 
     public function createPayout(Payout $payout, User $teacher): array
@@ -170,6 +205,7 @@ class XenditMoneyMovementService
         if (! $this->configured()) {
             throw new RuntimeException('Layanan pembayaran otomatis belum dikonfigurasi lengkap.');
         }
+
         return Http::acceptJson()->asJson()->withBasicAuth((string) config('xendit.secret_key'), '')
             ->connectTimeout(8)->timeout(25)->retry(2, 300, throw: false);
     }
@@ -177,7 +213,10 @@ class XenditMoneyMovementService
     private function normalisePhone(string $phone): ?string
     {
         $digits = preg_replace('/\D+/', '', $phone) ?: '';
-        if (str_starts_with($digits, '0')) $digits = '62'.substr($digits, 1);
+        if (str_starts_with($digits, '0')) {
+            $digits = '62'.substr($digits, 1);
+        }
+
         return str_starts_with($digits, '62') && strlen($digits) >= 10 ? '+'.$digits : null;
     }
 

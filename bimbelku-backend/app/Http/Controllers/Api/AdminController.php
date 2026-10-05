@@ -1086,32 +1086,9 @@ class AdminController extends Controller
             : 0;
         $matchingNeedsAttention = $canMatching
             ? BookingRequest::query()
+                ->whereNotNull('package_subject_id')
                 ->matchingAnchors()
-                ->where(function ($query) {
-                    $query
-                        ->where(function ($noTeacher) {
-                            $noTeacher
-                                ->where('status', 'no_teacher')
-                                ->whereDate('scheduled_date', '>=', today());
-                        })
-                        ->orWhere(function ($expired) {
-                            $expired
-                                ->where('status', 'expired')
-                                ->whereDate('scheduled_date', '>=', today());
-                        })
-                        ->orWhere(function ($pending) {
-                            $pending
-                                ->where('status', 'teacher_pending')
-                                ->whereNotNull('teacher_response_deadline')
-                                ->where('teacher_response_deadline', '<=', now());
-                        })
-                        ->orWhere(function ($expiring) {
-                            $expiring
-                                ->whereIn('status', ['matching', 'teacher_pending'])
-                                ->whereNotNull('search_expires_at')
-                                ->whereBetween('search_expires_at', [now(), now()->addHours(6)]);
-                        });
-                })
+                ->matchingNeedsAttention()
                 ->count()
             : 0;
         $pendingCases = $canCases
